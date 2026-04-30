@@ -235,6 +235,20 @@ let audioCtx = null;
 let masterGain = null;
 let musicNodes = [];
 let currentMusicZone = -1;
+let recentTones = [];           // for rate limiting
+let pendingSfxTimeouts = [];    // setTimeouts to cancel on restart
+function sfxTimeout(fn, ms) {
+  const id = setTimeout(() => {
+    pendingSfxTimeouts = pendingSfxTimeouts.filter(x => x !== id);
+    fn();
+  }, ms);
+  pendingSfxTimeouts.push(id);
+  return id;
+}
+function clearSfxTimeouts() {
+  for (const id of pendingSfxTimeouts) clearTimeout(id);
+  pendingSfxTimeouts = [];
+}
 function initAudio() {
   if (audioCtx) return;
   try {
@@ -244,9 +258,13 @@ function initAudio() {
     masterGain.connect(audioCtx.destination);
   } catch {}
 }
-// quick 1-shot oscillator helper
+// quick 1-shot oscillator helper (with rate-limit so audio thread can't choke)
 function tone({ freq, freq2 = null, dur = 0.12, type = 'sine', vol = 0.18, attack = 0.005, decay = null }) {
   if (!audioCtx) return;
+  const now = performance.now();
+  recentTones = recentTones.filter(t => now - t < 1000);
+  if (recentTones.length > 40) return;     // drop if overloaded
+  recentTones.push(now);
   const t0 = audioCtx.currentTime;
   const osc = audioCtx.createOscillator();
   const gain = audioCtx.createGain();
@@ -279,27 +297,27 @@ function noiseBurst({ dur = 0.15, vol = 0.2, lp = 600 }) {
 const SFX = {
   bounce:        () => tone({ freq: 320, freq2: 540, dur: 0.07, type: 'square',   vol: 0.12 }),
   springBounce:  () => { tone({ freq: 220, freq2: 1400, dur: 0.18, type: 'square', vol: 0.14 });
-                         setTimeout(() => tone({ freq: 1400, freq2: 1800, dur: 0.06, type: 'triangle', vol: 0.10 }), 90); },
+                         sfxTimeout(() => tone({ freq: 1400, freq2: 1800, dur: 0.06, type: 'triangle', vol: 0.10 }), 90); },
   breakBounce:   () => { tone({ freq: 380, freq2: 460, dur: 0.06, type: 'square', vol: 0.10 });
                          noiseBurst({ dur: 0.12, vol: 0.07, lp: 800 }); },
   coinChime: (combo = 1) => {
     const base = 880 + Math.min(8, combo) * 90;
     tone({ freq: base, freq2: base * 1.5, dur: 0.10, type: 'triangle', vol: 0.13 });
-    setTimeout(() => tone({ freq: base * 1.5, freq2: base * 2, dur: 0.08, type: 'sine', vol: 0.10 }), 30);
+    sfxTimeout(() => tone({ freq: base * 1.5, freq2: base * 2, dur: 0.08, type: 'sine', vol: 0.10 }), 30);
   },
   powerupGet:    () => {
     [392, 523, 659, 880].forEach((f, i) =>
-      setTimeout(() => tone({ freq: f, dur: 0.1, type: 'triangle', vol: 0.14 }), i * 50));
+      sfxTimeout(() => tone({ freq: f, dur: 0.1, type: 'triangle', vol: 0.14 }), i * 50));
   },
   rocketBurst:   () => { noiseBurst({ dur: 0.4, vol: 0.18, lp: 2000 });
                          tone({ freq: 200, freq2: 80, dur: 0.4, type: 'sawtooth', vol: 0.10 }); },
   sharkWarning:  () => { tone({ freq: 180, freq2: 220, dur: 0.18, type: 'sawtooth', vol: 0.12 });
-                         setTimeout(() => tone({ freq: 220, freq2: 180, dur: 0.18, type: 'sawtooth', vol: 0.12 }), 200); },
+                         sfxTimeout(() => tone({ freq: 220, freq2: 180, dur: 0.18, type: 'sawtooth', vol: 0.12 }), 200); },
   shieldDeflect: () => { tone({ freq: 1200, freq2: 600, dur: 0.12, type: 'sine', vol: 0.16 });
                          tone({ freq: 800,  freq2: 1600, dur: 0.10, type: 'triangle', vol: 0.10 }); },
   zoneChange:    () => {
     [261, 329, 392, 523, 659, 783].forEach((f, i) =>
-      setTimeout(() => tone({ freq: f, dur: 0.18, type: 'triangle', vol: 0.13 }), i * 60));
+      sfxTimeout(() => tone({ freq: f, dur: 0.18, type: 'triangle', vol: 0.13 }), i * 60));
   },
   comboPing:     (n) => tone({ freq: 600 + Math.min(8, n) * 80, dur: 0.06, type: 'sine', vol: 0.08 }),
   gameOver:      () => {
@@ -308,11 +326,11 @@ const SFX = {
     tone({ freq: 110, freq2: 30, dur: 0.9, type: 'sine', vol: 0.18 });
     // sad descending wail
     [659, 523, 415, 311, 196, 130].forEach((f, i) =>
-      setTimeout(() => tone({ freq: f, freq2: f * 0.95, dur: 0.5, type: 'sawtooth', vol: 0.16 }), 80 + i * 180));
+      sfxTimeout(() => tone({ freq: f, freq2: f * 0.95, dur: 0.5, type: 'sawtooth', vol: 0.16 }), 80 + i * 180));
     // rumble
-    setTimeout(() => noiseBurst({ dur: 1.2, vol: 0.16, lp: 320 }), 100);
+    sfxTimeout(() => noiseBurst({ dur: 1.2, vol: 0.16, lp: 320 }), 100);
     // closing whomp
-    setTimeout(() => tone({ freq: 80, freq2: 30, dur: 0.5, type: 'sine', vol: 0.2 }), 1200);
+    sfxTimeout(() => tone({ freq: 80, freq2: 30, dur: 0.5, type: 'sine', vol: 0.2 }), 1200);
   },
 };
 // per-zone music config: chord progression + arp + bass + percussion
@@ -368,8 +386,8 @@ const ZONE_MUSIC = [
       [98, 130.8, 165],   // G major
     ],
     arp:    [0, 2, 4, 2, 5, 4, 2, 0, 4, 2, 5, 4, 2, 4, 5, 7],
-    bass:   [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0],
-    hat:    [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
+    bass:   [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0],
+    hat:    [0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1],
     waveChord: 'sawtooth', waveArp: 'square',
     chordVol: 0.05, arpVol: 0.08, bassVol: 0.07, filterFreq: 1800,
   },
@@ -1572,8 +1590,17 @@ function draw() {
 }
 
 let raf;
+let visible = !document.hidden;
+document.addEventListener('visibilitychange', () => {
+  visible = !document.hidden;
+  if (!visible) {
+    stopMusic();
+  } else if (started && alive) {
+    startMusicForZone(currentZone());
+  }
+});
 function loop() {
-  update();
+  if (visible) update();
   draw();
   raf = requestAnimationFrame(loop);
 }
@@ -1584,6 +1611,8 @@ const goEl = document.getElementById('gameover');
 
 function start() {
   initAudio();
+  clearSfxTimeouts();
+  recentTones = [];
   reset();
   started = true;
   alive = true;
