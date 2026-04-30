@@ -1005,32 +1005,42 @@ function draw() {
     ctx.fill();
   }
 
-  // ── parallax layer 2: zone-themed decorations (mid) ──
+  // ── parallax layer 2: zone-themed art (mid) ──
   const zIdx = currentZone();
   const zImg = zoneImgs[zIdx];
 
-  // if a zone background image is loaded, blend it in
-  if (zImg && zImg.ready) {
-    const imgY = (camera * 0.4) % VH();
-    ctx.globalAlpha = 0.55;
-    ctx.drawImage(zImg, 0, -imgY, VW(), VH());
-    ctx.drawImage(zImg, 0, VH() - imgY, VW(), VH());
+  if (zImg && zImg.ready && zImg.naturalWidth > 0) {
+    // cover-fit: image fills viewport width, height scales by aspect
+    const imgAspect = zImg.naturalHeight / zImg.naturalWidth;
+    const drawW = VW();
+    const drawH = drawW * imgAspect;
+    // parallax: camera moves up (negative), image scrolls down at 0.5×
+    const parallaxOffset = (camera * 0.5) % drawH;
+    let yStart = -parallaxOffset;
+    if (yStart > 0) yStart -= drawH;
+    // tile vertically to cover viewport
+    ctx.globalAlpha = 0.85;
+    for (let y = yStart; y < VH() + 50; y += drawH) {
+      ctx.drawImage(zImg, 0, y, drawW, drawH);
+    }
     ctx.globalAlpha = 1;
-  }
-
-  // procedural decorations (always drawn, overlay images if any)
-  drawDecor();
-
-  // bg candles only in early zones (chart vibe), fade out higher up
-  if (zIdx < 2) {
-    for (const c of candles) {
-      const y = c.y - camera * 0.5;
-      if (y < -200 || y > VH() + 100) continue;
-      ctx.globalAlpha = c.alpha * (1 - zIdx * 0.4);
-      ctx.fillStyle = c.bull ? '#44ff88' : '#ff2266';
-      ctx.fillRect(c.x, y, c.w, c.h);
-      ctx.fillRect(c.x + c.w/2 - 1, y - 10, 2, c.h + 20);
-      ctx.globalAlpha = 1;
+    // dim slightly so platforms still pop
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.18)';
+    ctx.fillRect(0, 0, VW(), VH());
+  } else {
+    // fallback: procedural decorations
+    drawDecor();
+    // bg candles only in early zones
+    if (zIdx < 2) {
+      for (const c of candles) {
+        const y = c.y - camera * 0.5;
+        if (y < -200 || y > VH() + 100) continue;
+        ctx.globalAlpha = c.alpha * (1 - zIdx * 0.4);
+        ctx.fillStyle = c.bull ? '#44ff88' : '#ff2266';
+        ctx.fillRect(c.x, y, c.w, c.h);
+        ctx.fillRect(c.x + c.w/2 - 1, y - 10, 2, c.h + 20);
+        ctx.globalAlpha = 1;
+      }
     }
   }
 
