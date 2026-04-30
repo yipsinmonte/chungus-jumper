@@ -157,6 +157,89 @@
     color: var(--pink-soft);
     opacity: 0.7;
   }
+  .name-input {
+    background: rgba(10,4,16,0.5);
+    border: 1px solid rgba(255,143,208,0.4);
+    color: #fff;
+    font-family: "Bebas Neue", sans-serif;
+    font-size: 28px;
+    letter-spacing: 4px;
+    text-align: center;
+    text-transform: uppercase;
+    padding: 12px 22px;
+    width: min(320px, 70vw);
+    outline: none;
+    margin-bottom: 18px;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .name-input:focus {
+    border-color: var(--pink-soft);
+    box-shadow: 0 0 24px rgba(255,143,208,0.4);
+  }
+  .name-input::placeholder { color: rgba(255,143,208,0.5); }
+  .lb-wrap {
+    margin-top: 38px;
+    width: min(420px, 88vw);
+    background: rgba(10,4,16,0.55);
+    border: 1px solid rgba(255,143,208,0.18);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    padding: 16px 18px 14px;
+  }
+  .lb-wrap.empty { display: none; }
+  .lb-title {
+    font-family: "Major Mono Display", monospace;
+    font-size: 12px;
+    letter-spacing: 8px;
+    color: var(--pink-soft);
+    text-align: center;
+    margin-bottom: 10px;
+    text-transform: lowercase;
+  }
+  .lb-list {
+    list-style: none; padding: 0; margin: 0;
+    font-family: "Space Grotesk", sans-serif;
+  }
+  .lb-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(255,143,208,0.08);
+    font-size: 16px;
+    color: #fff;
+  }
+  .lb-list li:last-child { border-bottom: none; }
+  .lb-list .rank {
+    font-family: "Major Mono Display", monospace;
+    font-size: 11px;
+    color: var(--pink-soft);
+    width: 26px;
+  }
+  .lb-list .lbname {
+    flex: 1;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 500;
+    margin: 0 8px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .lb-list .lbscore {
+    font-family: "Bebas Neue", sans-serif;
+    font-size: 22px;
+    color: var(--yellow);
+    letter-spacing: 1px;
+    font-variant-numeric: tabular-nums;
+  }
+  .lb-list li.me {
+    background: rgba(255,251,0,0.08);
+    padding-left: 8px; padding-right: 8px;
+    margin: 0 -8px;
+  }
 
   /* Game over */
   .gameover h1 { font-size: 11vw; line-height: 0.9; }
@@ -230,12 +313,21 @@
   <div class="eyebrow">— jump the curve —</div>
   <h1>Chungus<br>Jumper</h1>
   <div class="tag">climb the bonding curve · eat the buys · dodge the dumps</div>
+  <input id="name-input" class="name-input" type="text" placeholder="your name" maxlength="14" autocomplete="off" spellcheck="false">
   <button class="btn" id="play-btn">JUMP IN</button>
   <div class="controls">← → arrows · A D · or tap left / right</div>
+  <div class="lb-wrap" id="lb-wrap">
+    <div class="lb-title">— top runs —</div>
+    <ol class="lb-list" id="lb-list"></ol>
+  </div>
 </div>
 
 <div class="screen gameover hidden" id="gameover">
   <canvas id="wincard-canvas" class="wincard"></canvas>
+  <div class="lb-wrap" style="margin-top: 18px;">
+    <div class="lb-title">— top runs —</div>
+    <ol class="lb-list" id="go-lb"></ol>
+  </div>
   <div class="go-actions">
     <button class="btn" id="retry-btn">JUMP AGAIN</button>
     <button class="btn ghost" id="download-btn">SAVE CARD</button>
@@ -515,6 +607,8 @@ const FRICTION = 0.85;
 let player, platforms, coins, particles, hazards, sharks, powerups, stars, candles;
 let camera, alive, started, highestY, gameTime;
 let nextHazardAt, nextSharkAt, nextPowerupAt;
+let coinsCollected = 0;
+let playerName = localStorage.getItem('chungus.name') || '';
 let input = { left: 0, right: 0 };
 // juice
 let shakeAmount = 0, shakeDecay = 0;
@@ -545,6 +639,7 @@ function reset() {
   shakeAmount = 0; shakeDecay = 0;
   comboCount = 0; comboExpires = 0; comboMult = 1; comboFlash = 0;
   zoneFlash = 0; lastZone = -1; zoneEnterCamera = 0;
+  coinsCollected = 0;
   lastPathPlatform = null;
   spawnTier(VH(), 'wide');
   for (let i = 1; i < 10; i++) spawnTier(VH() - i * 110);
@@ -1037,6 +1132,7 @@ function update(dt) {
     if (player.x + player.w > c.x && player.x < c.x + c.w
         && player.y + player.h > c.y && player.y < c.y + c.h) {
       c.collected = true;
+      coinsCollected++;
       emit(c.x + c.w/2, c.y + c.h/2, '#fffb00', 12);
       if (gameTime < comboExpires) comboCount++;
       else comboCount = 1;
@@ -1100,7 +1196,7 @@ function update(dt) {
   // update HUD
   const heightM = Math.max(0, Math.floor(-highestY / 10));
   // mcap = base height × $1000, with combo multiplier on collected coins (count)
-  const collected = coins.filter(c => c.collected).length;
+  const collected = coinsCollected;
   const mcap = heightM * 1000 + collected * 1000 * (comboMult);
   document.getElementById('mcap').textContent = '$' + mcap.toLocaleString();
   document.getElementById('height').textContent = heightM.toLocaleString();
@@ -1640,7 +1736,54 @@ function loop() {
 const titleEl = document.getElementById('title');
 const goEl = document.getElementById('gameover');
 
+// ── leaderboard (localStorage) ──────────────────────────────
+const LB_KEY = 'chungus.leaderboard';
+const LB_MAX = 10;
+function loadLeaderboard() {
+  try { return JSON.parse(localStorage.getItem(LB_KEY) || '[]'); } catch { return []; }
+}
+function saveLeaderboard(lb) {
+  try { localStorage.setItem(LB_KEY, JSON.stringify(lb)); } catch {}
+}
+function pushScore(name, mcap, height, zone) {
+  const lb = loadLeaderboard();
+  lb.push({ name, mcap, height, zone, t: Date.now() });
+  lb.sort((a, b) => b.mcap - a.mcap);
+  const trimmed = lb.slice(0, LB_MAX);
+  saveLeaderboard(trimmed);
+  return trimmed.findIndex(e => e.name === name && e.mcap === mcap && e.t);
+}
+function renderLeaderboard(highlightTimestamp = null) {
+  const list = document.getElementById('lb-list');
+  const wrap = document.getElementById('lb-wrap');
+  const lb = loadLeaderboard();
+  if (lb.length === 0) {
+    wrap.classList.add('empty');
+    return;
+  }
+  wrap.classList.remove('empty');
+  list.innerHTML = '';
+  lb.forEach((e, i) => {
+    const li = document.createElement('li');
+    if (highlightTimestamp && e.t === highlightTimestamp) li.className = 'me';
+    li.innerHTML = `
+      <span class="rank">${String(i+1).padStart(2,'0')}</span>
+      <span class="lbname">${escapeHtml(e.name)}</span>
+      <span class="lbscore">$${e.mcap.toLocaleString()}</span>
+    `;
+    list.appendChild(li);
+  });
+}
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
 function start() {
+  // read + persist name
+  const inp = document.getElementById('name-input');
+  const v = (inp.value || '').trim().toUpperCase().slice(0, 14);
+  playerName = v || 'ANON';
+  localStorage.setItem('chungus.name', playerName);
   initAudio();
   clearSfxTimeouts();
   recentTones = [];
@@ -1652,16 +1795,47 @@ function start() {
   startMusicForZone(0);
 }
 
+let lastScoreTimestamp = null;
 function gameOver() {
   stopMusic();
   currentMusicZone = -1;
+  // push to leaderboard
+  const heightM = Math.max(0, Math.floor(-highestY / 10));
+  const collected = coinsCollected;
+  const mcap = heightM * 1000 + collected * 1000 * comboMult;
+  const zoneName = ZONES[currentZone()].name;
+  const t = Date.now();
+  pushScore(playerName, mcap, heightM, zoneName);
+  lastScoreTimestamp = t;
+  // patch the timestamp into the leaderboard entry we just pushed (so highlight works)
+  const lb = loadLeaderboard();
+  const found = lb.find(e => e.name === playerName && e.mcap === mcap);
+  if (found) { found.t = t; saveLeaderboard(lb); }
   renderWinCard();
+  renderGameOverLeaderboard();
   goEl.classList.remove('hidden');
+}
+
+function renderGameOverLeaderboard() {
+  let goLb = document.getElementById('go-lb');
+  if (!goLb) return;
+  const lb = loadLeaderboard();
+  goLb.innerHTML = '';
+  lb.slice(0, 5).forEach((e, i) => {
+    const li = document.createElement('li');
+    if (e.t === lastScoreTimestamp) li.className = 'me';
+    li.innerHTML = `
+      <span class="rank">${String(i+1).padStart(2,'0')}</span>
+      <span class="lbname">${escapeHtml(e.name)}</span>
+      <span class="lbscore">$${e.mcap.toLocaleString()}</span>
+    `;
+    goLb.appendChild(li);
+  });
 }
 
 function renderWinCard() {
   const heightM = Math.max(0, Math.floor(-highestY / 10));
-  const collected = coins.filter(c => c.collected).length;
+  const collected = coinsCollected;
   const mcap = heightM * 1000 + collected * 1000 * comboMult;
   const zoneName = ZONES[currentZone()].name;
 
@@ -1691,89 +1865,68 @@ function renderWinCard() {
     x.fillRect(0, 0, W, H);
   }
 
-  // top dark gradient for title legibility
-  const topG = x.createLinearGradient(0, 0, 0, H * 0.35);
-  topG.addColorStop(0, 'rgba(0,0,0,0.78)');
+  // ── light gradient overlays (only at edges, keep image visible) ──
+  const topG = x.createLinearGradient(0, 0, 0, 280);
+  topG.addColorStop(0, 'rgba(0,0,0,0.72)');
   topG.addColorStop(1, 'rgba(0,0,0,0)');
   x.fillStyle = topG;
-  x.fillRect(0, 0, W, H * 0.35);
+  x.fillRect(0, 0, W, 280);
 
-  // bottom dark gradient for stats
-  const botG = x.createLinearGradient(0, H * 0.62, 0, H);
+  const botG = x.createLinearGradient(0, H - 240, 0, H);
   botG.addColorStop(0, 'rgba(0,0,0,0)');
-  botG.addColorStop(1, 'rgba(0,0,0,0.92)');
+  botG.addColorStop(1, 'rgba(0,0,0,0.85)');
   x.fillStyle = botG;
-  x.fillRect(0, H * 0.62, W, H * 0.38);
+  x.fillRect(0, H - 240, W, 240);
 
-  // small eyebrow line
-  x.font = '500 26px "Major Mono Display", monospace';
+  // ── TITLE ─────────────────────────────────────────────────
   x.textAlign = 'center';
   x.textBaseline = 'middle';
-  x.fillStyle = '#ff8fd0';
-  x.fillText('— issue №' + (Math.floor(Math.random() * 999) + 100) + ' · the deal was made —', W/2, 75);
-
-  // TITLE: gradient text fill
-  x.font = '700 160px "Bebas Neue", sans-serif';
-  const tg = x.createLinearGradient(0, 110, 0, 270);
+  x.font = '700 130px "Bebas Neue", sans-serif';
+  const tg = x.createLinearGradient(0, 60, 0, 200);
   tg.addColorStop(0, '#ffffff');
   tg.addColorStop(0.45, '#ffd0ee');
   tg.addColorStop(1, '#ff44aa');
   x.shadowColor = '#ff44aa';
-  x.shadowBlur = 28;
+  x.shadowBlur = 26;
   x.fillStyle = tg;
-  x.fillText('FUCK MY CHUNGUS LIFE', W/2, 195);
+  x.fillText('FUCK MY CHUNGUS LIFE', W/2, 110);
   x.shadowBlur = 0;
 
-  // hairline rule
-  x.strokeStyle = 'rgba(255, 143, 208, 0.5)';
-  x.lineWidth = 1;
-  x.beginPath();
-  x.moveTo(W * 0.15, 290);
-  x.lineTo(W * 0.85, 290);
-  x.stroke();
+  // ── BOTTOM STRIP: name + mcap + stats ─────────────────────
+  // name (tiny eyebrow above mcap)
+  x.font = '500 28px "Major Mono Display", monospace';
+  x.fillStyle = '#ff8fd0';
+  x.fillText(playerName, W/2, H - 200);
 
-  // ── final mcap big ────────────────────────────────────────
-  x.font = '500 30px "Major Mono Display", monospace';
-  x.fillStyle = '#ffaadd';
-  x.fillText('— final mcap reached —', W/2, H * 0.66);
-
-  x.font = '700 230px "Bebas Neue", sans-serif';
+  // mcap
+  x.font = '700 150px "Bebas Neue", sans-serif';
   x.fillStyle = '#fffb00';
   x.shadowColor = '#ff00aa';
-  x.shadowBlur = 50;
-  x.fillText('$' + mcap.toLocaleString(), W/2, H * 0.78);
+  x.shadowBlur = 36;
+  x.fillText('$' + mcap.toLocaleString(), W/2, H - 110);
   x.shadowBlur = 0;
 
-  // ── stats strip ──────────────────────────────────────────
-  x.font = '500 28px "Major Mono Display", monospace';
-  x.fillStyle = '#ffaadd';
+  // stats row at very bottom
+  x.font = '500 22px "Major Mono Display", monospace';
   const stats = [
-    [`HEIGHT`, heightM.toLocaleString() + 'm'],
+    [`HEIGHT`, heightM.toLocaleString() + 'M'],
     [`ZONE`, zoneName],
-    [`MULT`, comboMult + 'x'],
     [`COINS`, collected.toString()],
+    [`MULT`, comboMult + 'x'],
   ];
   const stripW = W - 200;
   const each = stripW / stats.length;
-  const stripY = H * 0.90;
+  const labelY = H - 50;
+  const valY = H - 24;
   stats.forEach(([label, val], i) => {
     const cx = 100 + each * i + each / 2;
-    x.fillStyle = 'rgba(255, 170, 221, 0.65)';
-    x.font = '500 22px "Major Mono Display", monospace';
-    x.fillText(label, cx, stripY);
+    x.fillStyle = 'rgba(255, 170, 221, 0.6)';
+    x.font = '500 14px "Major Mono Display", monospace';
+    x.fillText(label, cx, labelY);
     x.fillStyle = '#ffffff';
-    x.font = '700 44px "Bebas Neue", sans-serif';
-    x.fillText(val, cx, stripY + 42);
+    x.font = '700 26px "Bebas Neue", sans-serif';
+    x.fillText(val, cx, valY);
   });
-
-  // ── watermark / brand strip ──────────────────────────────
-  x.font = '500 20px "Major Mono Display", monospace';
-  x.fillStyle = 'rgba(255, 170, 221, 0.55)';
-  x.textAlign = 'left';
-  x.fillText('// $CHUNGUS · the takeover', 50, H - 30);
-  x.textAlign = 'right';
-  x.fillText('chungus-jumper.vercel.app', W - 50, H - 30);
-  x.textAlign = 'center';
 
   return { mcap, heightM, zoneName, collected };
 }
@@ -1789,7 +1942,7 @@ function downloadCard() {
 
 function tweetIt() {
   const heightM = Math.max(0, Math.floor(-highestY / 10));
-  const collected = coins.filter(c => c.collected).length;
+  const collected = coinsCollected;
   const mcap = heightM * 1000 + collected * 1000 * comboMult;
   // auto-download the card so user can paste it
   downloadCard();
@@ -1800,9 +1953,27 @@ function tweetIt() {
 }
 
 document.getElementById('play-btn').addEventListener('click', start);
-document.getElementById('retry-btn').addEventListener('click', start);
+document.getElementById('retry-btn').addEventListener('click', () => {
+  // bring back title screen so they see the leaderboard before playing again
+  goEl.classList.add('hidden');
+  titleEl.classList.remove('hidden');
+  renderLeaderboard();
+  // jump in immediately too
+  start();
+});
 document.getElementById('download-btn').addEventListener('click', downloadCard);
 document.getElementById('tweet-btn').addEventListener('click', tweetIt);
+
+// prefill name + render leaderboard on initial load
+const nameInput = document.getElementById('name-input');
+nameInput.value = playerName;
+nameInput.addEventListener('input', () => {
+  playerName = nameInput.value.toUpperCase().slice(0, 14);
+});
+nameInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') start();
+});
+renderLeaderboard();
 
 // boot
 reset();
