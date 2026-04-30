@@ -160,6 +160,29 @@
 
   /* Game over */
   .gameover h1 { font-size: 11vw; line-height: 0.9; }
+  .wincard {
+    width: auto;
+    max-width: 92vw;
+    max-height: 64vh;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+    border: 1px solid rgba(255,143,208,0.35);
+    box-shadow: 0 0 60px rgba(255,68,170,0.35), 0 20px 40px rgba(0,0,0,0.5);
+    image-rendering: -webkit-optimize-contrast;
+  }
+  .go-actions {
+    display: flex; flex-wrap: wrap; justify-content: center; gap: 0;
+    margin-top: 22px;
+  }
+  .go-hint {
+    margin-top: 14px;
+    font-family: "Major Mono Display", monospace;
+    font-size: 11px; letter-spacing: 4px;
+    color: var(--pink-soft);
+    opacity: 0.6;
+    text-transform: lowercase;
+  }
   .final {
     margin: 10px 0 20px;
     font-family: "Bebas Neue", sans-serif;
@@ -212,18 +235,13 @@
 </div>
 
 <div class="screen gameover hidden" id="gameover">
-  <div class="eyebrow">— chart crashed —</div>
-  <h1>FUCK MY<br>CHUNGUS<br>LIFE</h1>
-  <div style="margin-top: 24px;">
-    <div class="final-label">final mcap reached</div>
-    <div class="final" id="final-mcap">$0</div>
-    <div class="final-label">ATH height</div>
-    <div class="final" id="final-height" style="font-size: 48px; color: #fff; text-shadow: none;">0m</div>
-  </div>
-  <div style="margin-top: 28px;">
+  <canvas id="wincard-canvas" class="wincard"></canvas>
+  <div class="go-actions">
     <button class="btn" id="retry-btn">JUMP AGAIN</button>
-    <button class="btn ghost" id="tweet-btn">TWEET MY ATH</button>
+    <button class="btn ghost" id="download-btn">SAVE CARD</button>
+    <button class="btn ghost" id="tweet-btn">TWEET ATH</button>
   </div>
+  <div class="go-hint">card saved → paste it into your tweet</div>
 </div>
 
 <script>
@@ -465,6 +483,13 @@ let chungusReady = false;
 chungusImg.onload = () => { chungusReady = true; };
 chungusImg.onerror = () => { chungusReady = false; };
 chungusImg.src = 'chungus.png';
+
+// wincard background
+const wincardImg = new Image();
+let wincardReady = false;
+wincardImg.onload = () => { wincardReady = true; };
+wincardImg.onerror = () => { wincardReady = false; };
+wincardImg.src = 'wincard.jpg';
 let W, H;
 function resize() {
   W = canvas.width = window.innerWidth * devicePixelRatio;
@@ -1630,22 +1655,153 @@ function start() {
 function gameOver() {
   stopMusic();
   currentMusicZone = -1;
-  const heightM = Math.max(0, Math.floor(-highestY / 10));
-  const mcap = heightM * 1000;
-  document.getElementById('final-mcap').textContent = '$' + mcap.toLocaleString();
-  document.getElementById('final-height').textContent = heightM.toLocaleString() + 'm';
+  renderWinCard();
   goEl.classList.remove('hidden');
+}
+
+function renderWinCard() {
+  const heightM = Math.max(0, Math.floor(-highestY / 10));
+  const collected = coins.filter(c => c.collected).length;
+  const mcap = heightM * 1000 + collected * 1000 * comboMult;
+  const zoneName = ZONES[currentZone()].name;
+
+  const c = document.getElementById('wincard-canvas');
+  const W = 1920, H = 1080;
+  c.width = W; c.height = H;
+  const x = c.getContext('2d');
+
+  // ── bg image (cover-fit) ────────────────────────────────
+  if (wincardReady) {
+    const ia = wincardImg.naturalHeight / wincardImg.naturalWidth;
+    const ca = H / W;
+    let dw, dh, dx, dy;
+    if (ia > ca) {           // image taller than card aspect
+      dw = W; dh = W * ia;
+      dx = 0; dy = (H - dh) / 2;
+    } else {                  // image wider
+      dh = H; dw = H / ia;
+      dy = 0; dx = (W - dw) / 2;
+    }
+    x.drawImage(wincardImg, dx, dy, dw, dh);
+  } else {
+    const g = x.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#1a0828');
+    g.addColorStop(1, '#3a0866');
+    x.fillStyle = g;
+    x.fillRect(0, 0, W, H);
+  }
+
+  // top dark gradient for title legibility
+  const topG = x.createLinearGradient(0, 0, 0, H * 0.35);
+  topG.addColorStop(0, 'rgba(0,0,0,0.78)');
+  topG.addColorStop(1, 'rgba(0,0,0,0)');
+  x.fillStyle = topG;
+  x.fillRect(0, 0, W, H * 0.35);
+
+  // bottom dark gradient for stats
+  const botG = x.createLinearGradient(0, H * 0.62, 0, H);
+  botG.addColorStop(0, 'rgba(0,0,0,0)');
+  botG.addColorStop(1, 'rgba(0,0,0,0.92)');
+  x.fillStyle = botG;
+  x.fillRect(0, H * 0.62, W, H * 0.38);
+
+  // small eyebrow line
+  x.font = '500 26px "Major Mono Display", monospace';
+  x.textAlign = 'center';
+  x.textBaseline = 'middle';
+  x.fillStyle = '#ff8fd0';
+  x.fillText('— issue №' + (Math.floor(Math.random() * 999) + 100) + ' · the deal was made —', W/2, 75);
+
+  // TITLE: gradient text fill
+  x.font = '700 160px "Bebas Neue", sans-serif';
+  const tg = x.createLinearGradient(0, 110, 0, 270);
+  tg.addColorStop(0, '#ffffff');
+  tg.addColorStop(0.45, '#ffd0ee');
+  tg.addColorStop(1, '#ff44aa');
+  x.shadowColor = '#ff44aa';
+  x.shadowBlur = 28;
+  x.fillStyle = tg;
+  x.fillText('FUCK MY CHUNGUS LIFE', W/2, 195);
+  x.shadowBlur = 0;
+
+  // hairline rule
+  x.strokeStyle = 'rgba(255, 143, 208, 0.5)';
+  x.lineWidth = 1;
+  x.beginPath();
+  x.moveTo(W * 0.15, 290);
+  x.lineTo(W * 0.85, 290);
+  x.stroke();
+
+  // ── final mcap big ────────────────────────────────────────
+  x.font = '500 30px "Major Mono Display", monospace';
+  x.fillStyle = '#ffaadd';
+  x.fillText('— final mcap reached —', W/2, H * 0.66);
+
+  x.font = '700 230px "Bebas Neue", sans-serif';
+  x.fillStyle = '#fffb00';
+  x.shadowColor = '#ff00aa';
+  x.shadowBlur = 50;
+  x.fillText('$' + mcap.toLocaleString(), W/2, H * 0.78);
+  x.shadowBlur = 0;
+
+  // ── stats strip ──────────────────────────────────────────
+  x.font = '500 28px "Major Mono Display", monospace';
+  x.fillStyle = '#ffaadd';
+  const stats = [
+    [`HEIGHT`, heightM.toLocaleString() + 'm'],
+    [`ZONE`, zoneName],
+    [`MULT`, comboMult + 'x'],
+    [`COINS`, collected.toString()],
+  ];
+  const stripW = W - 200;
+  const each = stripW / stats.length;
+  const stripY = H * 0.90;
+  stats.forEach(([label, val], i) => {
+    const cx = 100 + each * i + each / 2;
+    x.fillStyle = 'rgba(255, 170, 221, 0.65)';
+    x.font = '500 22px "Major Mono Display", monospace';
+    x.fillText(label, cx, stripY);
+    x.fillStyle = '#ffffff';
+    x.font = '700 44px "Bebas Neue", sans-serif';
+    x.fillText(val, cx, stripY + 42);
+  });
+
+  // ── watermark / brand strip ──────────────────────────────
+  x.font = '500 20px "Major Mono Display", monospace';
+  x.fillStyle = 'rgba(255, 170, 221, 0.55)';
+  x.textAlign = 'left';
+  x.fillText('// $CHUNGUS · the takeover', 50, H - 30);
+  x.textAlign = 'right';
+  x.fillText('chungus-jumper.vercel.app', W - 50, H - 30);
+  x.textAlign = 'center';
+
+  return { mcap, heightM, zoneName, collected };
+}
+
+function downloadCard() {
+  const canvas = document.getElementById('wincard-canvas');
+  const link = document.createElement('a');
+  const heightM = Math.max(0, Math.floor(-highestY / 10));
+  link.download = `chungus-jumper-${heightM}m.png`;
+  link.href = canvas.toDataURL('image/png');
+  link.click();
 }
 
 function tweetIt() {
   const heightM = Math.max(0, Math.floor(-highestY / 10));
-  const mcap = heightM * 1000;
-  const text = `FUCK MY CHUNGUS LIFE\n\ni climbed $CHUNGUS to $${mcap.toLocaleString()} mcap (${heightM}m) before the chart crashed 🐰\n\nbeat me at chungus.cool`;
-  window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, '_blank');
+  const collected = coins.filter(c => c.collected).length;
+  const mcap = heightM * 1000 + collected * 1000 * comboMult;
+  // auto-download the card so user can paste it
+  downloadCard();
+  const text = `FUCK MY CHUNGUS LIFE\n\ni climbed $CHUNGUS to $${mcap.toLocaleString()} mcap (${heightM}m) before the chart crashed 🐰\n\nbeat me → chungus-jumper.vercel.app`;
+  setTimeout(() => {
+    window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, '_blank');
+  }, 300);
 }
 
 document.getElementById('play-btn').addEventListener('click', start);
 document.getElementById('retry-btn').addEventListener('click', start);
+document.getElementById('download-btn').addEventListener('click', downloadCard);
 document.getElementById('tweet-btn').addEventListener('click', tweetIt);
 
 // boot
