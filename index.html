@@ -266,6 +266,7 @@ let input = { left: 0, right: 0 };
 let shakeAmount = 0, shakeDecay = 0;
 let zoneFlash = 0, zoneFlashText = '';
 let lastZone = -1;
+let zoneEnterCamera = 0;
 // combo
 let comboCount = 0, comboExpires = 0, comboMult = 1;
 let comboFlash = 0;
@@ -289,7 +290,7 @@ function reset() {
   nextPowerupAt = 900;
   shakeAmount = 0; shakeDecay = 0;
   comboCount = 0; comboExpires = 0; comboMult = 1; comboFlash = 0;
-  zoneFlash = 0; lastZone = -1;
+  zoneFlash = 0; lastZone = -1; zoneEnterCamera = 0;
   lastPathPlatform = null;
   spawnTier(VH(), 'wide');
   for (let i = 1; i < 10; i++) spawnTier(VH() - i * 110);
@@ -357,11 +358,11 @@ function spawnDecorAt(y) {
 
 // ── theme zones ────────────────────────────────────────────
 const ZONES = [
-  { upTo: 2500,     name: 'GIANT BURROW',         decor: 'roots',
+  { upTo: 800,      name: 'GIANT BURROW',         decor: 'roots',
     bg1: '#1c0a02', bg2: '#3a1a05', accent: '#4dffaa' },
-  { upTo: 5000,     name: 'CARROT PILLARS',       decor: 'pillars',
+  { upTo: 2000,     name: 'CARROT PILLARS',       decor: 'pillars',
     bg1: '#0a0508', bg2: '#1a0816', accent: '#ff8c1a' },
-  { upTo: 10000,    name: 'COSMIC CABBAGE PATCH', decor: 'cosmos',
+  { upTo: 4000,     name: 'COSMIC CABBAGE PATCH', decor: 'cosmos',
     bg1: '#0a0530', bg2: '#3a0866', accent: '#88ccff' },
   { upTo: Infinity, name: 'GOLDEN STRATOSPHERE',  decor: 'crystals',
     bg1: '#3d1a4a', bg2: '#ffaa44', accent: '#ffd700' },
@@ -741,6 +742,7 @@ function update() {
   if (zoneIdx !== lastZone) {
     if (lastZone >= 0) { zoneFlash = 90; zoneFlashText = '⚡ ' + ZONES[zoneIdx].name; shake(12); }
     lastZone = zoneIdx;
+    zoneEnterCamera = camera;        // reset parallax origin so new bg starts un-flipped
   }
   if (zoneFlash > 0) zoneFlash--;
 
@@ -1016,10 +1018,11 @@ function draw() {
     const drawH = drawW * imgAspect;
     // parallax: slow scroll so seams are less frequent
     const PAR = 0.25;
-    // total cycle = 2 × drawH (because every 2nd tile is flipped, so cycle is 2×)
+    // cycle = 2 × drawH (mirror tiling cycle)
     const cycle = drawH * 2;
-    const off = ((camera * PAR) % cycle + cycle) % cycle;
-    // start drawing one cycle above viewport top
+    // offset is RELATIVE to when we entered this zone — first tile at y=0 is un-flipped
+    const cameraDelta = camera - zoneEnterCamera;
+    const off = ((cameraDelta * PAR) % cycle + cycle) % cycle;
     let y = -off;
     let tileIdx = 0;
     ctx.globalAlpha = 0.92;
