@@ -1736,40 +1736,70 @@ function loop() {
 const titleEl = document.getElementById('title');
 const goEl = document.getElementById('gameover');
 
-// ── leaderboard (localStorage) ──────────────────────────────
-const LB_KEY = 'chungus.leaderboard';
-const LB_MAX = 10;
-function loadLeaderboard() {
-  try { return JSON.parse(localStorage.getItem(LB_KEY) || '[]'); } catch { return []; }
+// ── leaderboard (global · backed by Vercel KV) ─────────────
+let cachedLb = [];
+
+async function fetchLeaderboard() {
+  try {
+    const r = await fetch('/api/leaderboard', { cache: 'no-store' });
+    if (!r.ok) throw new Error('bad response');
+    const data = await r.json();
+    if (Array.isArray(data)) {
+      cachedLb = data;
+      return data;
+    }
+  } catch (e) {
+    console.warn('lb fetch failed, fallback to local cache:', e.message);
+  }
+  // fallback: local cache for offline/dev
+  try { return JSON.parse(localStorage.getItem('chungus.lb.cache') || '[]'); } catch { return []; }
 }
-function saveLeaderboard(lb) {
-  try { localStorage.setItem(LB_KEY, JSON.stringify(lb)); } catch {}
+
+async function pushScore(name, mcap, height, zone) {
+  const entry = { name, mcap, height, zone, t: Date.now() };
+  // optimistic local update so UI feels instant
+  cachedLb.push(entry);
+  cachedLb.sort((a, b) => b.mcap - a.mcap);
+  cachedLb = cachedLb.slice(0, 50);
+  try { localStorage.setItem('chungus.lb.cache', JSON.stringify(cachedLb)); } catch {}
+  // POST to server
+  try {
+    await fetch('/api/score', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name, mcap, height, zone }),
+    });
+  } catch (e) {
+    console.warn('score post failed:', e.message);
+  }
+  // re-fetch authoritative list
+  fetchLeaderboard().then(list => {
+    if (list && list.length) {
+      cachedLb = list;
+      renderLeaderboard(entry.t);
+      renderGameOverLeaderboard();
+    }
+  });
+  return entry.t;
 }
-function pushScore(name, mcap, height, zone) {
-  const lb = loadLeaderboard();
-  lb.push({ name, mcap, height, zone, t: Date.now() });
-  lb.sort((a, b) => b.mcap - a.mcap);
-  const trimmed = lb.slice(0, LB_MAX);
-  saveLeaderboard(trimmed);
-  return trimmed.findIndex(e => e.name === name && e.mcap === mcap && e.t);
-}
-function renderLeaderboard(highlightTimestamp = null) {
+
+async function renderLeaderboard(highlightTimestamp = null) {
   const list = document.getElementById('lb-list');
   const wrap = document.getElementById('lb-wrap');
-  const lb = loadLeaderboard();
-  if (lb.length === 0) {
+  const lb = cachedLb.length ? cachedLb : await fetchLeaderboard();
+  if (!lb || lb.length === 0) {
     wrap.classList.add('empty');
     return;
   }
   wrap.classList.remove('empty');
   list.innerHTML = '';
-  lb.forEach((e, i) => {
+  lb.slice(0, 10).forEach((e, i) => {
     const li = document.createElement('li');
     if (highlightTimestamp && e.t === highlightTimestamp) li.className = 'me';
     li.innerHTML = `
       <span class="rank">${String(i+1).padStart(2,'0')}</span>
       <span class="lbname">${escapeHtml(e.name)}</span>
-      <span class="lbscore">$${e.mcap.toLocaleString()}</span>
+      <span class="lbscore">$${Number(e.mcap).toLocaleString()}</span>
     `;
     list.appendChild(li);
   });
@@ -1796,38 +1826,32 @@ function start() {
 }
 
 let lastScoreTimestamp = null;
-function gameOver() {
+async function gameOver() {
   stopMusic();
   currentMusicZone = -1;
-  // push to leaderboard
   const heightM = Math.max(0, Math.floor(-highestY / 10));
   const collected = coinsCollected;
   const mcap = heightM * 1000 + collected * 1000 * comboMult;
   const zoneName = ZONES[currentZone()].name;
-  const t = Date.now();
-  pushScore(playerName, mcap, heightM, zoneName);
-  lastScoreTimestamp = t;
-  // patch the timestamp into the leaderboard entry we just pushed (so highlight works)
-  const lb = loadLeaderboard();
-  const found = lb.find(e => e.name === playerName && e.mcap === mcap);
-  if (found) { found.t = t; saveLeaderboard(lb); }
   renderWinCard();
-  renderGameOverLeaderboard();
   goEl.classList.remove('hidden');
+  // submit + render leaderboard (async, doesn't block card display)
+  lastScoreTimestamp = await pushScore(playerName, mcap, heightM, zoneName);
+  renderGameOverLeaderboard();
 }
 
 function renderGameOverLeaderboard() {
-  let goLb = document.getElementById('go-lb');
+  const goLb = document.getElementById('go-lb');
   if (!goLb) return;
-  const lb = loadLeaderboard();
   goLb.innerHTML = '';
+  const lb = cachedLb || [];
   lb.slice(0, 5).forEach((e, i) => {
     const li = document.createElement('li');
     if (e.t === lastScoreTimestamp) li.className = 'me';
     li.innerHTML = `
       <span class="rank">${String(i+1).padStart(2,'0')}</span>
       <span class="lbname">${escapeHtml(e.name)}</span>
-      <span class="lbscore">$${e.mcap.toLocaleString()}</span>
+      <span class="lbscore">$${Number(e.mcap).toLocaleString()}</span>
     `;
     goLb.appendChild(li);
   });
@@ -1973,7 +1997,20 @@ nameInput.addEventListener('input', () => {
 nameInput.addEventListener('keydown', e => {
   if (e.key === 'Enter') start();
 });
-renderLeaderboard();
+// initial leaderboard fetch (async)
+fetchLeaderboard().then(list => {
+  if (list) cachedLb = list;
+  renderLeaderboard();
+});
+// keep title-screen leaderboard fresh
+setInterval(() => {
+  if (!started || !alive) {
+    fetchLeaderboard().then(list => {
+      if (list) cachedLb = list;
+      renderLeaderboard(lastScoreTimestamp);
+    });
+  }
+}, 30000);
 
 // boot
 reset();
