@@ -1010,22 +1010,36 @@ function draw() {
   const zImg = zoneImgs[zIdx];
 
   if (zImg && zImg.ready && zImg.naturalWidth > 0) {
-    // cover-fit: image fills viewport width, height scales by aspect
+    // cover-fit: fill viewport width, scale height by aspect
     const imgAspect = zImg.naturalHeight / zImg.naturalWidth;
     const drawW = VW();
     const drawH = drawW * imgAspect;
-    // parallax: camera moves up (negative), image scrolls down at 0.5×
-    const parallaxOffset = (camera * 0.5) % drawH;
-    let yStart = -parallaxOffset;
-    if (yStart > 0) yStart -= drawH;
-    // tile vertically to cover viewport
-    ctx.globalAlpha = 0.85;
-    for (let y = yStart; y < VH() + 50; y += drawH) {
-      ctx.drawImage(zImg, 0, y, drawW, drawH);
+    // parallax: slow scroll so seams are less frequent
+    const PAR = 0.25;
+    // total cycle = 2 × drawH (because every 2nd tile is flipped, so cycle is 2×)
+    const cycle = drawH * 2;
+    const off = ((camera * PAR) % cycle + cycle) % cycle;
+    // start drawing one cycle above viewport top
+    let y = -off;
+    let tileIdx = 0;
+    ctx.globalAlpha = 0.92;
+    while (y < VH() + 50) {
+      const flipped = tileIdx % 2 === 1;
+      if (flipped) {
+        ctx.save();
+        ctx.translate(0, y + drawH);
+        ctx.scale(1, -1);
+        ctx.drawImage(zImg, 0, 0, drawW, drawH);
+        ctx.restore();
+      } else {
+        ctx.drawImage(zImg, 0, y, drawW, drawH);
+      }
+      y += drawH;
+      tileIdx++;
     }
     ctx.globalAlpha = 1;
     // dim slightly so platforms still pop
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.18)';
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.22)';
     ctx.fillRect(0, 0, VW(), VH());
   } else {
     // fallback: procedural decorations
@@ -1044,17 +1058,7 @@ function draw() {
     }
   }
 
-  // ── parallax layer 3: chart grid (foreground) ──
-  ctx.strokeStyle = 'rgba(255, 143, 208, 0.06)';
-  ctx.lineWidth = 1;
-  const gridSize = 60;
-  const offset = -camera % gridSize;
-  for (let y = offset; y < VH(); y += gridSize) {
-    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(VW(), y); ctx.stroke();
-  }
-  for (let x = 0; x < VW(); x += gridSize) {
-    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, VH()); ctx.stroke();
-  }
+  // (chart grid removed — bg images carry the visual depth now)
 
   // platforms (as candles)
   for (const p of platforms) {
