@@ -303,46 +303,142 @@ const SFX = {
   },
   comboPing:     (n) => tone({ freq: 600 + Math.min(8, n) * 80, dur: 0.06, type: 'sine', vol: 0.08 }),
   gameOver:      () => {
-    [659, 523, 392, 196].forEach((f, i) =>
-      setTimeout(() => tone({ freq: f, dur: 0.4, type: 'sawtooth', vol: 0.18 }), i * 220));
-    setTimeout(() => noiseBurst({ dur: 0.6, vol: 0.15, lp: 400 }), 100);
+    // dramatic bass drop
+    tone({ freq: 220, freq2: 50, dur: 0.7, type: 'sawtooth', vol: 0.22 });
+    tone({ freq: 110, freq2: 30, dur: 0.9, type: 'sine', vol: 0.18 });
+    // sad descending wail
+    [659, 523, 415, 311, 196, 130].forEach((f, i) =>
+      setTimeout(() => tone({ freq: f, freq2: f * 0.95, dur: 0.5, type: 'sawtooth', vol: 0.16 }), 80 + i * 180));
+    // rumble
+    setTimeout(() => noiseBurst({ dur: 1.2, vol: 0.16, lp: 320 }), 100);
+    // closing whomp
+    setTimeout(() => tone({ freq: 80, freq2: 30, dur: 0.5, type: 'sine', vol: 0.2 }), 1200);
   },
 };
-function startMusicForZone(zoneIdx) {
-  if (!audioCtx || zoneIdx === currentMusicZone) return;
-  // stop existing music
+// per-zone music config: chord progression + arp + bass + percussion
+const ZONE_MUSIC = [
+  { // GIANT BURROW — dark dungeon, slow, mysterious
+    bpm: 64,
+    chords: [
+      [55, 65.4, 82.4],   // A minor (A-C-E)
+      [49, 58.3, 73.4],   // G minor
+      [44, 55, 65.4],     // F major
+      [55, 65.4, 82.4],   // A minor
+    ],
+    arp:    [0, 2, 0, 1, 2, 1, 0, 0],   // slow, brooding
+    bass:   [1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0],
+    hat:    null,
+    waveChord: 'triangle', waveArp: 'sine',
+    chordVol: 0.05, arpVol: 0.06, bassVol: 0.07, filterFreq: 500,
+  },
+  { // CARROT PILLARS — warm, ancient, mid-tempo
+    bpm: 88,
+    chords: [
+      [65.4, 82.4, 98],   // C major (C-E-G)
+      [73.4, 87.3, 110],  // D minor
+      [82.4, 98, 123.5],  // E minor
+      [87.3, 110, 130.8], // F major
+    ],
+    arp:    [0, 2, 1, 2, 0, 2, 1, 4],
+    bass:   [1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1],
+    hat:    [0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0],
+    waveChord: 'sawtooth', waveArp: 'triangle',
+    chordVol: 0.045, arpVol: 0.07, bassVol: 0.07, filterFreq: 800,
+  },
+  { // COSMIC CABBAGE — ethereal, floating, mid-fast
+    bpm: 108,
+    chords: [
+      [82.4, 98, 123.5, 146.8],   // E minor 7
+      [73.4, 87.3, 110, 130.8],   // D maj 7-ish
+      [98, 123.5, 146.8, 174.6],  // G major
+      [82.4, 98, 123.5, 146.8],   // E minor 7
+    ],
+    arp:    [3, 2, 1, 0, 1, 2, 3, 2, 4, 3, 2, 1, 2, 3, 4, 5],
+    bass:   [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0],
+    hat:    [0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0],
+    waveChord: 'sine', waveArp: 'sine',
+    chordVol: 0.04, arpVol: 0.06, bassVol: 0.06, filterFreq: 1400,
+  },
+  { // GOLDEN STRATOSPHERE — triumphant, layered, fast
+    bpm: 132,
+    chords: [
+      [98, 130.8, 165],   // G major
+      [82.4, 110, 130.8], // E minor
+      [87.3, 116.5, 146.8], // F major
+      [98, 130.8, 165],   // G major
+    ],
+    arp:    [0, 2, 4, 2, 5, 4, 2, 0, 4, 2, 5, 4, 2, 4, 5, 7],
+    bass:   [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0],
+    hat:    [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
+    waveChord: 'sawtooth', waveArp: 'square',
+    chordVol: 0.05, arpVol: 0.08, bassVol: 0.07, filterFreq: 1800,
+  },
+];
+
+let musicTimer = null;
+let musicTick = 0;
+let musicCfg = null;
+
+function stopMusic() {
+  if (musicTimer) { clearInterval(musicTimer); musicTimer = null; }
   for (const n of musicNodes) { try { n.stop(); } catch {} }
   musicNodes = [];
+}
+
+function startMusicForZone(zoneIdx) {
+  if (!audioCtx || zoneIdx === currentMusicZone) return;
+  stopMusic();
   currentMusicZone = zoneIdx;
-  // very subtle chord drone per zone, low volume
-  const chords = [
-    [55, 110, 165],     // GIANT BURROW: low minor drone
-    [73.4, 110, 146],   // CARROT PILLARS: warm
-    [87.3, 130.8, 196], // COSMIC: spacey major
-    [98, 196, 246, 294],// STRATOSPHERE: bright triad
-  ];
-  const types = ['sawtooth', 'triangle', 'sine', 'sine'];
-  const t0 = audioCtx.currentTime;
-  for (const f of chords[zoneIdx]) {
-    const osc = audioCtx.createOscillator();
-    osc.type = types[zoneIdx];
-    osc.frequency.value = f;
-    const lfo = audioCtx.createOscillator();
-    lfo.frequency.value = 0.15 + Math.random() * 0.1;
-    const lfoGain = audioCtx.createGain();
-    lfoGain.gain.value = 0.5;
-    const filter = audioCtx.createBiquadFilter();
-    filter.type = 'lowpass';
-    filter.frequency.value = 600;
-    const g = audioCtx.createGain();
-    g.gain.setValueAtTime(0, t0);
-    g.gain.linearRampToValueAtTime(0.04, t0 + 1.5);
-    osc.connect(filter).connect(g).connect(masterGain);
-    lfo.connect(lfoGain).connect(osc.frequency);
-    osc.start(t0);
-    lfo.start(t0);
-    musicNodes.push(osc, lfo);
+  musicCfg = ZONE_MUSIC[zoneIdx];
+  if (!musicCfg) return;
+  musicTick = 0;
+  // 16 ticks per bar = 16th notes
+  const tickMs = 60_000 / musicCfg.bpm / 4;
+  musicTimer = setInterval(musicStep, tickMs);
+}
+
+function musicStep() {
+  if (!musicCfg || !audioCtx) return;
+  const cfg = musicCfg;
+  const beat = musicTick % 16;
+  const bar = Math.floor(musicTick / 16) % cfg.chords.length;
+  const chord = cfg.chords[bar];
+  const beatSec = 60 / cfg.bpm;
+
+  // chord pad on beat 0 of bar
+  if (beat === 0) {
+    for (const f of chord) {
+      tone({
+        freq: f, dur: beatSec * 4 * 0.92,
+        type: cfg.waveChord, vol: cfg.chordVol, attack: 0.08,
+      });
+    }
+    // also higher octave shimmer
+    if (cfg.filterFreq > 1000) {
+      tone({
+        freq: chord[0] * 4, dur: beatSec * 4 * 0.5,
+        type: 'sine', vol: cfg.chordVol * 0.6, attack: 0.15,
+      });
+    }
   }
+  // arpeggio: every 8th note (2 ticks)
+  if (beat % 2 === 0) {
+    const arpIdx = (beat / 2) % cfg.arp.length;
+    const deg = cfg.arp[arpIdx];
+    const note = chord[deg % chord.length] * Math.pow(2, Math.floor(deg / chord.length) + 1);
+    tone({ freq: note, dur: beatSec * 0.45, type: cfg.waveArp, vol: cfg.arpVol });
+  }
+  // bass pulse
+  if (cfg.bass && cfg.bass[beat]) {
+    tone({ freq: chord[0] * 0.5, dur: beatSec * 0.4, type: 'triangle', vol: cfg.bassVol, attack: 0.005 });
+    tone({ freq: chord[0] * 0.5, dur: beatSec * 0.15, type: 'sine', vol: cfg.bassVol * 0.5 });
+  }
+  // hi-hat
+  if (cfg.hat && cfg.hat[beat]) {
+    noiseBurst({ dur: 0.04, vol: 0.04, lp: 9000 });
+  }
+
+  musicTick++;
 }
 
 // chungus image
@@ -951,7 +1047,13 @@ function update() {
   particles = particles.filter(p => p.life > 0);
 
   // game over if fallen
-  if (player.y > camera + VH() + 100) { alive = false; gameOver(); return; }
+  if (player.y > camera + VH() + 100) {
+    alive = false;
+    SFX.gameOver();
+    shake(20);
+    gameOver();
+    return;
+  }
 
   // update HUD
   const heightM = Math.max(0, Math.floor(-highestY / 10));
@@ -1491,6 +1593,8 @@ function start() {
 }
 
 function gameOver() {
+  stopMusic();
+  currentMusicZone = -1;
   const heightM = Math.max(0, Math.floor(-highestY / 10));
   const mcap = heightM * 1000;
   document.getElementById('final-mcap').textContent = '$' + mcap.toLocaleString();
