@@ -303,9 +303,14 @@ function reset() {
       tw: Math.random() * Math.PI * 2,
     });
   }
-  // seed background candles (parallax mid layer)
+  // seed background candles (parallax mid layer, used in zone 1+2)
   for (let i = 0; i < 14; i++) {
     candles.push(spawnBgCandle(Math.random() * VH() * 3 - VH()));
+  }
+  // seed zone-themed decorations
+  decor = [];
+  for (let i = 0; i < 12; i++) {
+    decor.push(spawnDecorAt(Math.random() * VH() * 3 - VH()));
   }
 }
 
@@ -320,13 +325,57 @@ function spawnBgCandle(y) {
   };
 }
 
+// ── per-zone decorations: roots / pillars / cosmos / crystals ───
+let decor = [];
+function spawnDecorAt(y) {
+  const z = ZONES[currentZone()];
+  const prop = { y, kind: z.decor, born: gameTime };
+  if (z.decor === 'roots') {
+    prop.x = Math.random() * VW();
+    prop.length = 200 + Math.random() * 280;
+    prop.curve = (Math.random() - 0.5) * 200;
+    prop.thickness = 6 + Math.random() * 8;
+  } else if (z.decor === 'pillars') {
+    prop.x = 30 + Math.random() * (VW() - 110);
+    prop.w = 60 + Math.random() * 50;
+    prop.h = 220 + Math.random() * 180;
+  } else if (z.decor === 'cosmos') {
+    prop.x = Math.random() * VW();
+    prop.size = 30 + Math.random() * 80;
+    prop.kindSub = Math.random() < 0.6 ? 'cabbage' : 'crystal';
+    prop.rot = Math.random() * Math.PI * 2;
+    prop.spin = (Math.random() - 0.5) * 0.005;
+  } else if (z.decor === 'crystals') {
+    prop.x = Math.random() * VW();
+    prop.size = 40 + Math.random() * 80;
+    prop.sides = 6;
+    prop.rot = Math.random() * Math.PI * 2;
+    prop.spin = (Math.random() - 0.5) * 0.004;
+  }
+  return prop;
+}
+
 // ── theme zones ────────────────────────────────────────────
 const ZONES = [
-  { upTo: 2500,   name: 'BONDING CURVE',  bg1: '#0a0410', bg2: '#1a0828', accent: '#ff44aa' },
-  { upTo: 5000,   name: 'PUMPFUN COSMOS', bg1: '#08001a', bg2: '#1a0040', accent: '#aa44ff' },
-  { upTo: 10000,  name: 'DEX ZONE',       bg1: '#001020', bg2: '#003344', accent: '#44ddff' },
-  { upTo: Infinity, name: 'ATH CHAOS',    bg1: '#1a0008', bg2: '#330011', accent: '#fffb00' },
+  { upTo: 2500,     name: 'GIANT BURROW',         decor: 'roots',
+    bg1: '#1c0a02', bg2: '#3a1a05', accent: '#4dffaa' },
+  { upTo: 5000,     name: 'CARROT PILLARS',       decor: 'pillars',
+    bg1: '#0a0508', bg2: '#1a0816', accent: '#ff8c1a' },
+  { upTo: 10000,    name: 'COSMIC CABBAGE PATCH', decor: 'cosmos',
+    bg1: '#0a0530', bg2: '#3a0866', accent: '#88ccff' },
+  { upTo: Infinity, name: 'GOLDEN STRATOSPHERE',  decor: 'crystals',
+    bg1: '#3d1a4a', bg2: '#ffaa44', accent: '#ffd700' },
 ];
+
+// optional: drop bg-zone-1.png ... bg-zone-4.png in repo root, they'll auto-load
+const zoneImgs = ZONES.map((z, i) => {
+  const img = new Image();
+  img.dataset = { ready: false };
+  img.onload = () => { img.ready = true; };
+  img.onerror = () => { img.ready = false; };
+  img.src = `bg-zone-${i+1}.png`;
+  return img;
+});
 function currentZone() {
   const h = Math.max(0, -highestY) / 10;
   for (let i = 0; i < ZONES.length; i++) if (h < ZONES[i].upTo) return i;
@@ -711,6 +760,12 @@ function update() {
       Object.assign(c, spawnBgCandle(camera - VH() - Math.random() * 100));
     }
   }
+  for (const d of decor) {
+    if (d.spin) d.rot += d.spin;
+    if (d.y > camera + VH() + 200) {
+      Object.assign(d, spawnDecorAt(camera - VH() - Math.random() * 100));
+    }
+  }
 
   // coins → combo system
   for (const c of coins) {
@@ -791,6 +846,130 @@ function rounded(x, y, w, h, r) {
   ctx.closePath();
 }
 
+function drawDecor() {
+  for (const d of decor) {
+    const dy = d.y - camera * 0.5;
+    if (dy < -400 || dy > VH() + 200) continue;
+    if (d.kind === 'roots') {
+      // glowing carrot-tree root tendril descending
+      ctx.save();
+      ctx.shadowColor = '#4dffaa';
+      ctx.shadowBlur = 18;
+      ctx.strokeStyle = 'rgba(77, 255, 170, 0.32)';
+      ctx.lineWidth = d.thickness;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(d.x, dy);
+      ctx.bezierCurveTo(
+        d.x + d.curve * 0.5, dy + d.length * 0.4,
+        d.x - d.curve * 0.5, dy + d.length * 0.7,
+        d.x + d.curve, dy + d.length
+      );
+      ctx.stroke();
+      // bioluminescent fungi nodes
+      ctx.fillStyle = 'rgba(140, 255, 200, 0.55)';
+      for (let s = 0.2; s < 1; s += 0.25) {
+        const fx = d.x + d.curve * s + Math.sin(s * Math.PI) * 12;
+        const fy = dy + d.length * s;
+        ctx.beginPath();
+        ctx.arc(fx, fy, 4 + Math.random() * 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    } else if (d.kind === 'pillars') {
+      // giant carved orange carrot pillar
+      ctx.save();
+      const grad = ctx.createLinearGradient(d.x, dy, d.x + d.w, dy);
+      grad.addColorStop(0, 'rgba(255, 100, 20, 0.18)');
+      grad.addColorStop(0.5, 'rgba(255, 140, 26, 0.55)');
+      grad.addColorStop(1, 'rgba(255, 100, 20, 0.18)');
+      ctx.fillStyle = grad;
+      ctx.shadowColor = '#ff8c1a';
+      ctx.shadowBlur = 20;
+      // pillar body (slightly tapered like a carrot)
+      ctx.beginPath();
+      ctx.moveTo(d.x + d.w * 0.1, dy);
+      ctx.lineTo(d.x + d.w * 0.9, dy);
+      ctx.lineTo(d.x + d.w, dy + d.h);
+      ctx.lineTo(d.x, dy + d.h);
+      ctx.closePath();
+      ctx.fill();
+      // golden leafy top
+      ctx.fillStyle = 'rgba(255, 215, 0, 0.55)';
+      ctx.beginPath();
+      ctx.moveTo(d.x, dy);
+      ctx.lineTo(d.x + d.w * 0.3, dy - 22);
+      ctx.lineTo(d.x + d.w * 0.5, dy - 8);
+      ctx.lineTo(d.x + d.w * 0.7, dy - 26);
+      ctx.lineTo(d.x + d.w, dy);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    } else if (d.kind === 'cosmos') {
+      // floating frozen cabbage / crystalline carrot
+      ctx.save();
+      ctx.translate(d.x, dy);
+      ctx.rotate(d.rot);
+      ctx.shadowColor = '#88ccff';
+      ctx.shadowBlur = 22;
+      if (d.kindSub === 'cabbage') {
+        // concentric icy circles
+        ctx.fillStyle = 'rgba(120, 180, 255, 0.35)';
+        for (let r = d.size; r > 6; r -= 8) {
+          ctx.beginPath();
+          ctx.arc(0, 0, r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.strokeStyle = 'rgba(180, 220, 255, 0.5)';
+        ctx.lineWidth = 1.5;
+        for (let a = 0; a < Math.PI * 2; a += Math.PI / 6) {
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.lineTo(Math.cos(a) * d.size, Math.sin(a) * d.size);
+          ctx.stroke();
+        }
+      } else {
+        // crystalline carrot diamond
+        ctx.fillStyle = 'rgba(255, 160, 90, 0.3)';
+        ctx.strokeStyle = 'rgba(255, 200, 140, 0.7)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(0, -d.size);
+        ctx.lineTo(d.size * 0.5, 0);
+        ctx.lineTo(0, d.size);
+        ctx.lineTo(-d.size * 0.5, 0);
+        ctx.closePath();
+        ctx.fill(); ctx.stroke();
+      }
+      ctx.restore();
+    } else if (d.kind === 'crystals') {
+      // suspended golden geometric crystal
+      ctx.save();
+      ctx.translate(d.x, dy);
+      ctx.rotate(d.rot);
+      ctx.shadowColor = '#ffd700';
+      ctx.shadowBlur = 24;
+      const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, d.size);
+      grad.addColorStop(0, 'rgba(255, 230, 120, 0.7)');
+      grad.addColorStop(1, 'rgba(255, 170, 50, 0.15)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      for (let i = 0; i < d.sides; i++) {
+        const a = (i / d.sides) * Math.PI * 2;
+        const r = d.size * (i % 2 === 0 ? 1 : 0.7);
+        const x = Math.cos(a) * r, y = Math.sin(a) * r;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255, 245, 180, 0.55)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+}
+
 function draw() {
   // screen-shake offset
   const sx = (Math.random() - 0.5) * shakeAmount;
@@ -826,15 +1005,33 @@ function draw() {
     ctx.fill();
   }
 
-  // ── parallax layer 2: drifting bg candles (mid) ──
-  for (const c of candles) {
-    const y = c.y - camera * 0.5;
-    if (y < -200 || y > VH() + 100) continue;
-    ctx.globalAlpha = c.alpha;
-    ctx.fillStyle = c.bull ? '#44ff88' : '#ff2266';
-    ctx.fillRect(c.x, y, c.w, c.h);
-    ctx.fillRect(c.x + c.w/2 - 1, y - 10, 2, c.h + 20);
+  // ── parallax layer 2: zone-themed decorations (mid) ──
+  const zIdx = currentZone();
+  const zImg = zoneImgs[zIdx];
+
+  // if a zone background image is loaded, blend it in
+  if (zImg && zImg.ready) {
+    const imgY = (camera * 0.4) % VH();
+    ctx.globalAlpha = 0.55;
+    ctx.drawImage(zImg, 0, -imgY, VW(), VH());
+    ctx.drawImage(zImg, 0, VH() - imgY, VW(), VH());
     ctx.globalAlpha = 1;
+  }
+
+  // procedural decorations (always drawn, overlay images if any)
+  drawDecor();
+
+  // bg candles only in early zones (chart vibe), fade out higher up
+  if (zIdx < 2) {
+    for (const c of candles) {
+      const y = c.y - camera * 0.5;
+      if (y < -200 || y > VH() + 100) continue;
+      ctx.globalAlpha = c.alpha * (1 - zIdx * 0.4);
+      ctx.fillStyle = c.bull ? '#44ff88' : '#ff2266';
+      ctx.fillRect(c.x, y, c.w, c.h);
+      ctx.fillRect(c.x + c.w/2 - 1, y - 10, 2, c.h + 20);
+      ctx.globalAlpha = 1;
+    }
   }
 
   // ── parallax layer 3: chart grid (foreground) ──
