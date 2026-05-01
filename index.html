@@ -791,14 +791,16 @@ let zoneEnterCamera = 0;
 // combo
 let comboCount = 0, comboExpires = 0, comboMult = 1;
 let comboFlash = 0;
-// alon rug banner
+// rug banners
 let rugBannerStart = -9999;
+let bibiBannerStart = -9999;
 
 function reset() {
   player = { x: VW()/2, y: VH() - 120, vx: 0, vy: -8, w: 64, h: 64,
              shieldUntil: 0, rocketUntil: 0, slowfallUntil: 0,
              bigUntil: 0, alonStart: 0,
-             magaUntil: 0, magaBonus: 0, magaLastMcap: 0 };
+             magaUntil: 0, magaBonus: 0, magaLastMcap: 0,
+             deathFreezeUntil: 0, deathCause: '' };
   platforms = [];
   coins = [];
   particles = [];
@@ -816,6 +818,7 @@ function reset() {
   shakeAmount = 0; shakeDecay = 0;
   comboCount = 0; comboExpires = 0; comboMult = 1; comboFlash = 0;
   rugBannerStart = -9999;
+  bibiBannerStart = -9999;
   zoneFlash = 0; lastZone = -1; zoneEnterCamera = 0;
   coinsCollected = 0;
   lastPathPlatform = null;
@@ -1139,6 +1142,22 @@ canvas.addEventListener('touchmove', tStart, { passive: false });
 // ── game loop ──────────────────────────────────────────────
 function update(dt) {
   if (!started || !alive) return;
+
+  // death-freeze (e.g. bibi rug) — give the player time to read the banner
+  if (player.deathFreezeUntil) {
+    gameTime += dt;
+    if (gameTime >= player.deathFreezeUntil) {
+      alive = false;
+      gameOver();
+      return;
+    }
+    // suspended with tiny wobble, no input, no collisions
+    player.vx = 0;
+    player.vy = Math.sin(gameTime * 0.4) * 0.4;
+    player.y += player.vy * dt;
+    return;
+  }
+
   gameTime += dt;
 
   // input → vx (acceleration scaled by dt; friction uses Math.pow for frame-rate independence)
@@ -1157,10 +1176,11 @@ function update(dt) {
     emit(player.x + player.w/2, player.y + player.h/2, '#ff44ff', 20);
   }
 
-  // alon pump-and-rug
+  // alon pump-and-rug: 1s pump → 2s suspended hold (banner reads) → 0.5s crash
   const alonAge = player.alonStart ? gameTime - player.alonStart : -1;
-  const inAlonPump = alonAge >= 0 && alonAge < 60;
-  const inAlonRug  = alonAge >= 60 && alonAge < 90;
+  const inAlonPump  = alonAge >= 0   && alonAge < 60;
+  const inAlonHold  = alonAge >= 60  && alonAge < 180;   // 2 seconds
+  const inAlonCrash = alonAge >= 180 && alonAge < 210;
 
   // physics with power-up modifiers
   const inRocket = gameTime < player.rocketUntil;
@@ -1168,7 +1188,7 @@ function update(dt) {
   if (inAlonPump) {
     player.vy = Math.min(player.vy - 2 * dt, -32);   // hard upward
     if (Math.random() < dt * 2) emit(player.x + player.w/2, player.y + player.h, '#22ddff', 2);
-  } else if (inAlonRug) {
+  } else if (inAlonHold) {
     if (alonAge < 61) {
       // rug moment — flash + huge particle burst + banner
       emit(player.x + player.w/2, player.y + player.h/2, '#ff2266', 60);
@@ -1176,14 +1196,18 @@ function update(dt) {
       shake(20);
       rugBannerStart = gameTime;
     }
-    player.vy = 60;          // instant crash
+    // suspended in air: tiny wobble, horizontal momentum bleeds out
+    player.vx *= Math.pow(0.85, dt);
+    player.vy = Math.sin(alonAge * 0.4) * 0.6;
+  } else if (inAlonCrash) {
+    player.vy = 60;          // crash down
   } else if (inRocket) {
     player.vy = -16;          // sustained upward thrust (instant velocity, no dt)
     if (Math.random() < dt) emit(player.x + player.w/2, player.y + player.h, '#fffb00', 1);
   } else {
     player.vy += (inSlowfall ? GRAVITY * 0.45 : GRAVITY) * dt;
   }
-  if (player.alonStart && alonAge >= 90) player.alonStart = 0;
+  if (player.alonStart && alonAge >= 210) player.alonStart = 0;
   player.x += player.vx * dt;
   player.y += player.vy * dt;
 
@@ -1267,6 +1291,16 @@ function update(dt) {
         emit(h.x + h.w/2, h.y + h.h/2, '#fffb00', 20);
         shake(8);
         SFX.shieldDeflect();
+      } else if (h.kind === 'netanyahu') {
+        // bibi rug: 2s freeze with banner before the gameover screen
+        player.deathCause = 'bibi';
+        player.deathFreezeUntil = gameTime + 120;
+        bibiBannerStart = gameTime;
+        emit(player.x + player.w/2, player.y + player.h/2, '#ff0000', 60);
+        emit(player.x + player.w/2, player.y + player.h/2, '#ffffff', 30);
+        shake(25);
+        SFX.gameOver();
+        return;
       } else {
         alive = false;
         emit(player.x + player.w/2, player.y + player.h/2, '#ff2266', 40);
@@ -2045,18 +2079,60 @@ function draw() {
     ctx.restore();
   }
 
+  // ── BIBI RUG banner ────────────────────────────────────────
+  const bibiAge = gameTime - bibiBannerStart;
+  if (bibiAge >= 0 && bibiAge < 150) {
+    if (bibiAge < 12) {
+      ctx.fillStyle = `rgba(200, 0, 0, ${0.7 * (1 - bibiAge / 12)})`;
+      ctx.fillRect(0, 0, VW(), VH());
+    }
+    const drop = bibiAge < 20 ? -80 + (bibiAge / 20) * 80 : 0;
+    const fade = bibiAge > 110 ? Math.max(0, (150 - bibiAge) / 40) : 1;
+    const wob = Math.sin(bibiAge * 0.45) * 4;
+    const big = VW() < 600 ? 44 : 84;
+    const cx = VW() / 2;
+    const cy = VH() / 2 + drop + wob;
+
+    ctx.save();
+    ctx.globalAlpha = fade;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = `900 ${big}px "Comic Neue", "Comic Sans MS", cursive`;
+
+    // chromatic offsets — black + red shadow
+    ctx.fillStyle = '#000000';
+    ctx.fillText('BIBI RUGGED YOU', cx - 6, cy + 4);
+    ctx.fillStyle = '#660000';
+    ctx.fillText('BIBI RUGGED YOU', cx + 6, cy);
+
+    // main red text with glow + black stroke
+    ctx.shadowColor = '#ff0000';
+    ctx.shadowBlur = 40;
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = '#000';
+    ctx.strokeText('BIBI RUGGED YOU', cx, cy);
+    ctx.fillStyle = '#ff1111';
+    ctx.fillText('BIBI RUGGED YOU', cx, cy);
+
+    // sub-text
+    ctx.shadowBlur = 18;
+    ctx.font = `700 ${VW() < 600 ? 22 : 36}px "Courier New", monospace`;
+    ctx.fillStyle = '#ff5555';
+    ctx.fillText('FALLING CHUNGUS · TOTAL LOSS', cx, cy + big * 0.85);
+    ctx.restore();
+  }
+
   // ── ALON RUG banner ────────────────────────────────────────
   const rugAge = gameTime - rugBannerStart;
-  if (rugAge >= 0 && rugAge < 150) {
+  if (rugAge >= 0 && rugAge < 240) {
     // full-screen red flash for first 12 frames
     if (rugAge < 12) {
       ctx.fillStyle = `rgba(255, 30, 30, ${0.6 * (1 - rugAge / 12)})`;
       ctx.fillRect(0, 0, VW(), VH());
     }
     // dropping red banner
-    const t = rugAge / 150;
-    const drop = rugAge < 20 ? -80 + (rugAge / 20) * 80 : 0;          // slide down for 20 frames
-    const fade = rugAge > 110 ? Math.max(0, (150 - rugAge) / 40) : 1; // fade out final 40
+    const drop = rugAge < 20 ? -80 + (rugAge / 20) * 80 : 0;            // slide down for 20 frames
+    const fade = rugAge > 200 ? Math.max(0, (240 - rugAge) / 40) : 1;   // fade out final 40
     const wob = Math.sin(rugAge * 0.5) * 4;
     const big = VW() < 600 ? 44 : 84;
     const cx = VW() / 2;
