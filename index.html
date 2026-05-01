@@ -568,17 +568,74 @@ const SFX = {
   },
   comboPing:     (n) => tone({ freq: 600 + Math.min(8, n) * 80, dur: 0.06, type: 'sine', vol: 0.08 }),
   eagleScreech: () => {
-    // descending whistle (the iconic kee-aaarrr) on triangle + sawtooth detuned for raspy "voice"
-    tone({ freq: 2400, freq2: 700,  dur: 0.55, type: 'triangle', vol: 0.18 });
-    tone({ freq: 2380, freq2: 690,  dur: 0.55, type: 'sawtooth', vol: 0.10 });
-    // raspy noise bed gives it the screechy texture
-    noiseBurst({ dur: 0.5, vol: 0.10, lp: 4000 });
-    // second shorter cry
-    sfxTimeout(() => {
-      tone({ freq: 2100, freq2: 600, dur: 0.32, type: 'triangle', vol: 0.14 });
-      tone({ freq: 2080, freq2: 590, dur: 0.32, type: 'sawtooth', vol: 0.08 });
-      noiseBurst({ dur: 0.3, vol: 0.08, lp: 4000 });
-    }, 380);
+    if (!audioCtx) return;
+    const t0 = audioCtx.currentTime;
+    // single cry: sharp attack → vibrato'd sustain → descending tail, with raspy
+    // bandpass-filtered noise overlay + amplitude tremolo for the buzzy texture
+    function cry(start, dur, peakF, endF, vol = 0.22) {
+      const osc = audioCtx.createOscillator();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(peakF * 0.55, start);
+      osc.frequency.linearRampToValueAtTime(peakF, start + 0.045);          // 45ms rise = "kee"
+      osc.frequency.linearRampToValueAtTime(peakF * 0.92, start + dur*0.5);
+      osc.frequency.exponentialRampToValueAtTime(Math.max(endF, 60), start + dur);
+
+      // vibrato — fast pitch wobble for the warble
+      const vib = audioCtx.createOscillator();
+      vib.frequency.value = 13;
+      const vibGain = audioCtx.createGain();
+      vibGain.gain.value = peakF * 0.025;     // ±2.5% pitch wobble
+      vib.connect(vibGain).connect(osc.frequency);
+
+      // bandpass filter centered on the screech harmonic
+      const bp = audioCtx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.setValueAtTime(peakF * 1.4, start);
+      bp.frequency.exponentialRampToValueAtTime(Math.max(endF * 1.4, 200), start + dur);
+      bp.Q.value = 5;
+
+      // amplitude envelope with tremolo
+      const env = audioCtx.createGain();
+      env.gain.setValueAtTime(0, start);
+      env.gain.linearRampToValueAtTime(vol, start + 0.04);
+      env.gain.linearRampToValueAtTime(vol * 0.85, start + dur * 0.45);
+      env.gain.exponentialRampToValueAtTime(0.0008, start + dur);
+      const trem = audioCtx.createOscillator();
+      trem.frequency.value = 24;
+      const tremGain = audioCtx.createGain();
+      tremGain.gain.value = vol * 0.35;
+      trem.connect(tremGain).connect(env.gain);
+
+      osc.connect(bp).connect(env).connect(masterGain);
+      osc.start(start);   osc.stop(start + dur + 0.05);
+      vib.start(start);   vib.stop(start + dur + 0.05);
+      trem.start(start);  trem.stop(start + dur + 0.05);
+
+      // raspy bandpass noise — gives the "rrrrr" texture
+      const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * dur, audioCtx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < data.length; i++) {
+        const ph = i / data.length;
+        data[i] = (Math.random() * 2 - 1) * (0.55 + 0.45 * Math.sin(ph * 70));
+      }
+      const noise = audioCtx.createBufferSource();
+      noise.buffer = buf;
+      const nbp = audioCtx.createBiquadFilter();
+      nbp.type = 'bandpass';
+      nbp.frequency.setValueAtTime(peakF * 1.6, start);
+      nbp.frequency.exponentialRampToValueAtTime(Math.max(endF * 1.6, 200), start + dur);
+      nbp.Q.value = 3;
+      const nGain = audioCtx.createGain();
+      nGain.gain.setValueAtTime(0, start);
+      nGain.gain.linearRampToValueAtTime(0.14, start + 0.04);
+      nGain.gain.exponentialRampToValueAtTime(0.0008, start + dur);
+      noise.connect(nbp).connect(nGain).connect(masterGain);
+      noise.start(start);
+    }
+    // first cry: long descending "kee-eeerrr"
+    cry(t0,         0.75, 1400, 320, 0.24);
+    // second cry: shorter chirp "kek"
+    cry(t0 + 0.62,  0.42, 1600, 420, 0.20);
   },
   gameOver:      () => {
     // dramatic bass drop
