@@ -68,13 +68,16 @@ export default async function handler(req, res) {
       if (cleanMcap   > session.lastBeatMcap   + allowedMcapGrowth)   return res.status(400).json({ error: 'mcap diverges from heartbeat' });
       if (cleanHeight > session.lastBeatHeight + allowedHeightGrowth) return res.status(400).json({ error: 'height diverges from heartbeat' });
 
-      // 2) overall avg-rate cap on effective play time (alt-tab doesn't extend this)
-      //    legit top run averages ~25-30k mcap/sec; cap at 35k * 2 = 70k/s avg
+      // 2) overall avg-rate cap on effective play time (alt-tab doesn't extend this).
+      //    Legit base rate ~25-30k mcap/sec, but alon pump (+192k in 1s), MAGA+rocket
+      //    combos, and stacked bursts can push short games well above that average.
+      //    Cap mcap at effectiveSec * 35k * 3 = 105k/s avg, with a flat 800k burst
+      //    allowance so very short games that include one big legit burst still post.
       const totalEffectiveSec = (session.effectiveMs + sinceLastMs) / 1000;
-      if (cleanMcap > totalEffectiveSec * MAX_MCAP_PER_SEC * 2) {
+      if (cleanMcap > totalEffectiveSec * MAX_MCAP_PER_SEC * 3 + 800_000) {
         return res.status(400).json({ error: 'mcap exceeds effective rate' });
       }
-      if (cleanHeight > totalEffectiveSec * MAX_HEIGHT_PER_SEC * 2) {
+      if (cleanHeight > totalEffectiveSec * MAX_HEIGHT_PER_SEC * 3 + 800) {
         return res.status(400).json({ error: 'height exceeds effective rate' });
       }
     }

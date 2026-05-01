@@ -705,6 +705,25 @@ const SFX = {
       sfxTimeout(() => tone({ freq: f, dur: 0.18, type: 'triangle', vol: 0.13 }), i * 60));
   },
   comboPing:     (n) => tone({ freq: 600 + Math.min(8, n) * 80, dur: 0.06, type: 'sine', vol: 0.08 }),
+  cardDeal: () => {
+    noiseBurst({ dur: 0.07, vol: 0.10, lp: 3000 });
+    tone({ freq: 700, freq2: 240, dur: 0.07, type: 'triangle', vol: 0.06 });
+  },
+  cardShuffle: () => {
+    for (let i = 0; i < 7; i++) {
+      sfxTimeout(() => noiseBurst({ dur: 0.05, vol: 0.08, lp: 4500 }), i * 70);
+    }
+  },
+  bjWin: () => {
+    const notes = [523, 659, 784, 1047, 1319];   // C5 E5 G5 C6 E6
+    notes.forEach((f, i) =>
+      sfxTimeout(() => tone({ freq: f, dur: 0.18, type: 'triangle', vol: 0.16 }), i * 95));
+    sfxTimeout(() => {
+      tone({ freq: 1568, dur: 0.42, type: 'square',   vol: 0.18 });
+      tone({ freq: 1047, dur: 0.42, type: 'triangle', vol: 0.12 });
+      tone({ freq: 784,  dur: 0.5,  type: 'sine',     vol: 0.10 });
+    }, 530);
+  },
   eagleScreech: () => {
     if (!audioCtx) return;
     const t0 = audioCtx.currentTime;
@@ -2608,26 +2627,47 @@ function startBlackjack() {
     dealer: [],
     over: false,
     settled: false,
+    dealing: true,
   };
-  bjState.player.push(bjState.deck.pop());
-  bjState.dealer.push(bjState.deck.pop());
-  bjState.player.push(bjState.deck.pop());
-  bjState.dealer.push(bjState.deck.pop());
 
   const ov = document.getElementById('bj-overlay');
   ov.classList.remove('hidden');
   document.getElementById('bj-result').classList.add('hidden');
-  document.getElementById('bj-status').textContent = 'your move';
-  document.getElementById('bj-hit').disabled = false;
-  document.getElementById('bj-stand').disabled = false;
-  bjRender(false);
+  document.getElementById('bj-status').textContent = 'shuffling…';
+  document.getElementById('bj-hit').disabled = true;
+  document.getElementById('bj-stand').disabled = true;
+  document.getElementById('bj-player-hand').innerHTML = '';
+  document.getElementById('bj-dealer-hand').innerHTML = '';
+  document.getElementById('bj-player-total').textContent = 0;
+  document.getElementById('bj-dealer-total').textContent = '?';
 
-  // natural 21 → auto-stand for the showdown
-  if (bjHandTotal(bjState.player) === 21) {
-    document.getElementById('bj-hit').disabled = true;
-    document.getElementById('bj-stand').disabled = true;
-    setTimeout(() => bjStand(), 700);
-  }
+  SFX.cardShuffle();
+
+  // staggered initial deal: player, dealer, player, dealer
+  const dealOrder = ['player','dealer','player','dealer'];
+  const SHUFFLE_MS = 520;
+  const PER_CARD_MS = 280;
+  dealOrder.forEach((who, i) => {
+    setTimeout(() => {
+      if (!bjState) return;
+      bjState[who].push(bjState.deck.pop());
+      bjRender(false);
+      SFX.cardDeal();
+    }, SHUFFLE_MS + i * PER_CARD_MS);
+  });
+
+  // after deal completes, enable buttons (or auto-stand on natural 21)
+  setTimeout(() => {
+    if (!bjState) return;
+    bjState.dealing = false;
+    document.getElementById('bj-status').textContent = 'your move';
+    if (bjHandTotal(bjState.player) === 21) {
+      setTimeout(() => bjStand(), 600);
+    } else {
+      document.getElementById('bj-hit').disabled = false;
+      document.getElementById('bj-stand').disabled = false;
+    }
+  }, SHUFFLE_MS + dealOrder.length * PER_CARD_MS + 100);
 }
 
 function bjRender(revealDealer) {
@@ -2658,15 +2698,21 @@ function bjRender(revealDealer) {
 }
 
 function bjHit() {
-  if (!bjState || bjState.over) return;
+  if (!bjState || bjState.over || bjState.dealing) return;
   bjState.player.push(bjState.deck.pop());
   bjRender(false);
+  SFX.cardDeal();
   const t = bjHandTotal(bjState.player);
-  if (t > 21) { bjFinish('lose', 'BUST · −$250K'); return; }
+  if (t > 21) {
+    setTimeout(() => bjFinish('lose', 'BUST · −$250K'), 600);
+    document.getElementById('bj-hit').disabled = true;
+    document.getElementById('bj-stand').disabled = true;
+    return;
+  }
   if (t === 21) {
     document.getElementById('bj-hit').disabled = true;
     document.getElementById('bj-stand').disabled = true;
-    setTimeout(() => bjStand(), 500);
+    setTimeout(() => bjStand(), 600);
   }
 }
 
@@ -2677,12 +2723,21 @@ function bjStand() {
   document.getElementById('bj-stand').disabled = true;
   document.getElementById('bj-status').textContent = "dealer's turn…";
 
-  function dealerStep() {
+  // reveal dealer hole card first (with a sound), then deal further cards on a slower beat
+  setTimeout(() => {
     if (!bjState) return;
     bjRender(true);
+    SFX.cardDeal();
+    setTimeout(dealerStep, 800);
+  }, 600);
+
+  function dealerStep() {
+    if (!bjState) return;
     if (bjHandTotal(bjState.dealer) < 17) {
       bjState.dealer.push(bjState.deck.pop());
-      setTimeout(dealerStep, 550);
+      bjRender(true);
+      SFX.cardDeal();
+      setTimeout(dealerStep, 950);
       return;
     }
     const pt = bjHandTotal(bjState.player);
@@ -2691,7 +2746,6 @@ function bjStand() {
     else if (pt < dt)            bjFinish('lose', '−$250K');
     else                          bjFinish('push', 'PUSH · NO CHANGE');
   }
-  setTimeout(dealerStep, 600);
 }
 
 function bjFinish(outcome, msg) {
@@ -2705,8 +2759,8 @@ function bjFinish(outcome, msg) {
   r.className = 'bj-result ' + outcome;
   r.textContent = msg;
 
-  if (outcome === 'win')  { player.casinoBonus += 500_000; SFX.powerupGet(); }
-  if (outcome === 'lose') { player.casinoBonus -= 250_000; SFX.gameOver();   }
+  if (outcome === 'win')  { player.casinoBonus += 500_000; SFX.bjWin();    }
+  if (outcome === 'lose') { player.casinoBonus -= 250_000; SFX.gameOver();  }
 
   setTimeout(closeBlackjack, 2400);
 }
