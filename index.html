@@ -672,17 +672,29 @@ wincardImg.onerror = () => { wincardReady = false; };
 wincardImg.src = 'wincard.jpg';
 let W, H;
 function resize() {
-  W = canvas.width = window.innerWidth * devicePixelRatio;
-  H = canvas.height = window.innerHeight * devicePixelRatio;
-  canvas.style.width = window.innerWidth + 'px';
-  canvas.style.height = window.innerHeight + 'px';
-  ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+  const dpr = window.devicePixelRatio || 1;
+  // documentElement.clientWidth/Height tracks the real visible viewport,
+  // including post-fullscreen iframe sizes where window.innerHeight can lag.
+  const w = document.documentElement.clientWidth  || window.innerWidth;
+  const h = document.documentElement.clientHeight || window.innerHeight;
+  W = canvas.width  = w * dpr;
+  H = canvas.height = h * dpr;
+  canvas.style.width  = w + 'px';
+  canvas.style.height = h + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 resize();
-window.addEventListener('resize', resize);
+const scheduleResize = () => requestAnimationFrame(resize);
+window.addEventListener('resize', scheduleResize);
+window.addEventListener('orientationchange', scheduleResize);
+document.addEventListener('fullscreenchange', scheduleResize);
+document.addEventListener('webkitfullscreenchange', scheduleResize);
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', scheduleResize);
+}
 
-const VW = () => window.innerWidth;
-const VH = () => window.innerHeight;
+const VW = () => document.documentElement.clientWidth  || window.innerWidth;
+const VH = () => document.documentElement.clientHeight || window.innerHeight;
 
 // ── game state ─────────────────────────────────────────────
 const GRAVITY = 0.4;
