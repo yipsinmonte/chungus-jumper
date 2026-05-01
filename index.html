@@ -353,7 +353,6 @@
     text-shadow: 0 0 8px #ff00ff, 1px 1px 0 #000;
     margin-bottom: 6px;
   }
-  .result-height-label,
   .result-mcap-label {
     font-family: "Courier New", monospace;
     font-size: 11px;
@@ -363,25 +362,17 @@
     text-shadow: 0 0 4px #00ffff;
     margin-top: 6px;
   }
-  .result-height {
+  .result-mcap-big {
     font-family: "Comic Neue", "Comic Sans MS", cursive;
     font-weight: 700;
-    font-size: clamp(56px, 14vw, 104px);
+    font-size: clamp(56px, 13vw, 104px);
     line-height: 1;
     letter-spacing: 3px;
     color: var(--yellow);
     -webkit-text-stroke: 2px #000;
     text-shadow: 0 0 18px #ffff00cc, 0 0 36px #ff00ff66, 2px 2px 0 #000;
     margin: 2px 0 4px;
-  }
-  .result-mcap {
-    font-family: "Courier New", monospace;
-    font-weight: bold;
-    font-size: 28px;
-    letter-spacing: 1px;
-    color: var(--yellow);
-    text-shadow: 0 0 10px #ffff0099;
-    margin: 0 0 4px;
+    font-variant-numeric: tabular-nums;
   }
   .result-zone {
     font-family: "Comic Neue", cursive;
@@ -423,8 +414,7 @@
     h1 { font-size: 18vw; }
     .tag { font-size: 16px; }
     .gameover h1 { font-size: 12vw; }
-    .result-height { font-size: clamp(48px, 16vw, 80px); }
-    .result-mcap { font-size: 22px; }
+    .result-mcap-big { font-size: clamp(48px, 15vw, 88px); }
     .btn { font-size: 22px; padding: 12px 28px; letter-spacing: 3px; }
     .btn.ghost { font-size: 18px; padding: 10px 22px; }
     .mcap-num { font-size: 22px; }
@@ -466,10 +456,8 @@
   <div class="result-card">
     <div class="result-eyebrow">— jump complete —</div>
     <div class="result-name" id="result-name">ANON</div>
-    <div class="result-height-label">HEIGHT REACHED</div>
-    <div class="result-height" id="result-height">0M</div>
-    <div class="result-mcap-label">MCAP</div>
-    <div class="result-mcap" id="result-mcap">$0</div>
+    <div class="result-mcap-label">MCAP REACHED</div>
+    <div class="result-mcap-big" id="result-mcap">$0</div>
     <div class="result-zone" id="result-zone">CARROT PILLARS</div>
   </div>
   <div class="lb-wrap lb-big">
@@ -1990,10 +1978,9 @@ async function gameOver() {
   const collected = coinsCollected;
   const mcap = heightM * 1000 + collected * 1000 * comboMult;
   const zoneName = ZONES[currentZone()].name;
-  document.getElementById('result-name').textContent   = playerName || 'ANON';
-  document.getElementById('result-height').textContent = heightM.toLocaleString() + 'M';
-  document.getElementById('result-mcap').textContent   = '$' + mcap.toLocaleString();
-  document.getElementById('result-zone').textContent   = zoneName;
+  document.getElementById('result-name').textContent = playerName || 'ANON';
+  document.getElementById('result-mcap').textContent = '$' + mcap.toLocaleString();
+  document.getElementById('result-zone').textContent = zoneName;
   goEl.classList.remove('hidden');
   // submit + render leaderboard (async, doesn't block result display)
   lastScoreTimestamp = await pushScore(playerName, mcap, heightM, zoneName);
