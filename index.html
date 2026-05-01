@@ -1393,8 +1393,15 @@ function spawnPowerup(y) {
 }
 
 function currentMcap() {
+  // base value used by MAGA accumulation — must NOT include magaBonus
+  // (would feed back into itself each frame).
   const heightM = Math.max(0, Math.floor(-highestY / 10));
   return heightM * 1000 + coinsCollected * COIN_VALUE * comboMult;
+}
+function submissionMcap() {
+  // the number the player actually sees and the score endpoint expects.
+  // Used in heartbeat + final submission so they stay in sync.
+  return Math.max(0, currentMcap() + (player.magaBonus | 0) + (player.casinoBonus | 0));
 }
 
 function emit(x, y, color, n=10) {
@@ -2651,7 +2658,7 @@ function startHeartbeat() {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         token: scoreToken,
-        mcap: currentMcap(),
+        mcap: submissionMcap(),
         height: Math.max(0, Math.floor(-highestY / 10)),
       }),
     }).catch(() => {});
@@ -2866,7 +2873,30 @@ async function fetchLeaderboard() {
   try { return JSON.parse(localStorage.getItem('chungus.lb.cache') || '[]'); } catch { return []; }
 }
 
+function showSubmitError(reason) {
+  const goEl = document.getElementById('gameover');
+  if (!goEl) return;
+  let banner = document.getElementById('submit-err');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'submit-err';
+    banner.style.cssText = 'margin: 14px auto; padding: 10px 18px; max-width: 480px; ' +
+      'background: rgba(255,40,80,0.18); border: 2px solid #ff2255; border-radius: 8px; ' +
+      'color: #ff88aa; font: 700 13px "Major Mono Display", monospace; text-align: center; ' +
+      'letter-spacing: 1px; text-transform: uppercase;';
+    const card = goEl.querySelector('.gameover-card') || goEl.firstElementChild || goEl;
+    card.appendChild(banner);
+  }
+  banner.textContent = '⚠ score not saved: ' + reason;
+  banner.style.display = 'block';
+}
+function clearSubmitError() {
+  const banner = document.getElementById('submit-err');
+  if (banner) banner.style.display = 'none';
+}
+
 async function pushScore(name, mcap, height, zone) {
+  clearSubmitError();
   const entry = { name, mcap, height, zone, t: Date.now() };
   // optimistic local update so UI feels instant
   cachedLb.push(entry);
@@ -2875,12 +2905,19 @@ async function pushScore(name, mcap, height, zone) {
   try { localStorage.setItem('chungus.lb.cache', JSON.stringify(cachedLb)); } catch {}
   if (scoreToken) {
     try {
-      await fetch('/api/score', {
+      const r = await fetch('/api/score', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ name, mcap, height, zone, token: scoreToken }),
       });
-    } catch {}
+      if (!r.ok) {
+        let reason = 'rejected (' + r.status + ')';
+        try { const j = await r.json(); if (j && j.error) reason = j.error; } catch {}
+        showSubmitError(reason);
+      }
+    } catch (e) {
+      showSubmitError('network error');
+    }
     scoreToken = null;
   }
   // re-fetch authoritative list
