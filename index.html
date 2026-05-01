@@ -327,10 +327,11 @@
     background: var(--panel-mid);
     border: 4px solid var(--magenta);
     box-shadow: 0 0 30px #ff00ff99, inset 0 0 14px #ff00ff44;
-    padding: 18px 28px;
+    padding: 18px 22px;
     margin: 14px 0 8px;
     text-align: center;
     width: min(440px, 90vw);
+    container-type: inline-size;
   }
   .result-eyebrow {
     font-family: "Comic Neue", cursive;
@@ -365,14 +366,16 @@
   .result-mcap-big {
     font-family: "Comic Neue", "Comic Sans MS", cursive;
     font-weight: 700;
-    font-size: clamp(56px, 13vw, 104px);
+    font-size: min(15cqw, 64px);
     line-height: 1;
-    letter-spacing: 3px;
+    letter-spacing: 0;
     color: var(--yellow);
     -webkit-text-stroke: 2px #000;
     text-shadow: 0 0 18px #ffff00cc, 0 0 36px #ff00ff66, 2px 2px 0 #000;
     margin: 2px 0 4px;
-    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .result-zone {
     font-family: "Comic Neue", cursive;
@@ -414,7 +417,7 @@
     h1 { font-size: 18vw; }
     .tag { font-size: 16px; }
     .gameover h1 { font-size: 12vw; }
-    .result-mcap-big { font-size: clamp(48px, 15vw, 88px); }
+    .result-mcap-big { font-size: min(15cqw, 56px); }
     .btn { font-size: 22px; padding: 12px 28px; letter-spacing: 3px; }
     .btn.ghost { font-size: 18px; padding: 10px 22px; }
     .mcap-num { font-size: 22px; }
