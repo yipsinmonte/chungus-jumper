@@ -2380,36 +2380,31 @@ async function fetchScoreToken() {
       headers: { 'content-type': 'application/json' },
       body: '{}',
     });
-    if (!r.ok) throw new Error('start failed: ' + r.status);
+    if (!r.ok) { scoreToken = null; return; }
     const data = await r.json();
-    if (data && data.token) scoreToken = data.token;
-  } catch (e) {
-    console.warn('score token fetch failed:', e.message);
-    scoreToken = null;
-  }
+    scoreToken = (data && data.token) || null;
+  } catch { scoreToken = null; }
 }
 
-// ── heartbeat ─────────────────────────────────────────────
-// Posts current mcap/height every 2s while alive + visible. Server uses these
-// to track effective play time (capped per-gap so alt-tab can't extend it) and
-// to validate the final score against the trajectory.
-let heartbeatTimer = null;
+let _hbT = null;
 function startHeartbeat() {
   stopHeartbeat();
-  heartbeatTimer = setInterval(() => {
+  _hbT = setInterval(() => {
     if (!started || !alive || !scoreToken || document.hidden) return;
-    const h = Math.max(0, Math.floor(-highestY / 10));
-    const m = currentMcap();
     fetch('/api/beat', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ token: scoreToken, mcap: m, height: h }),
+      body: JSON.stringify({
+        token: scoreToken,
+        mcap: currentMcap(),
+        height: Math.max(0, Math.floor(-highestY / 10)),
+      }),
     }).catch(() => {});
   }, 2000);
 }
 function stopHeartbeat() {
-  if (heartbeatTimer) clearInterval(heartbeatTimer);
-  heartbeatTimer = null;
+  if (_hbT) clearInterval(_hbT);
+  _hbT = null;
 }
 
 async function fetchLeaderboard() {
@@ -2421,10 +2416,7 @@ async function fetchLeaderboard() {
       cachedLb = data;
       return data;
     }
-  } catch (e) {
-    console.warn('lb fetch failed, fallback to local cache:', e.message);
-  }
-  // fallback: local cache for offline/dev
+  } catch {}
   try { return JSON.parse(localStorage.getItem('chungus.lb.cache') || '[]'); } catch { return []; }
 }
 
@@ -2435,21 +2427,15 @@ async function pushScore(name, mcap, height, zone) {
   cachedLb.sort((a, b) => b.mcap - a.mcap);
   cachedLb = cachedLb.slice(0, 50);
   try { localStorage.setItem('chungus.lb.cache', JSON.stringify(cachedLb)); } catch {}
-  // POST to server (with HMAC token from /api/start)
-  if (!scoreToken) {
-    console.warn('no score token — score will not be saved');
-  } else {
+  if (scoreToken) {
     try {
-      const r = await fetch('/api/score', {
+      await fetch('/api/score', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ name, mcap, height, zone, token: scoreToken }),
       });
-      if (!r.ok) console.warn('score rejected:', r.status, await r.text().catch(()=>''));
-    } catch (e) {
-      console.warn('score post failed:', e.message);
-    }
-    scoreToken = null;   // single-use locally too
+    } catch {}
+    scoreToken = null;
   }
   // re-fetch authoritative list
   fetchLeaderboard().then(list => {
