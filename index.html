@@ -1967,6 +1967,23 @@ const goEl = document.getElementById('gameover');
 
 // ── leaderboard (global · backed by Vercel KV) ─────────────
 let cachedLb = [];
+let scoreToken = null;
+
+async function fetchScoreToken() {
+  try {
+    const r = await fetch('/api/start', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    });
+    if (!r.ok) throw new Error('start failed: ' + r.status);
+    const data = await r.json();
+    if (data && data.token) scoreToken = data.token;
+  } catch (e) {
+    console.warn('score token fetch failed:', e.message);
+    scoreToken = null;
+  }
+}
 
 async function fetchLeaderboard() {
   try {
@@ -1991,15 +2008,21 @@ async function pushScore(name, mcap, height, zone) {
   cachedLb.sort((a, b) => b.mcap - a.mcap);
   cachedLb = cachedLb.slice(0, 50);
   try { localStorage.setItem('chungus.lb.cache', JSON.stringify(cachedLb)); } catch {}
-  // POST to server
-  try {
-    await fetch('/api/score', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name, mcap, height, zone }),
-    });
-  } catch (e) {
-    console.warn('score post failed:', e.message);
+  // POST to server (with HMAC token from /api/start)
+  if (!scoreToken) {
+    console.warn('no score token — score will not be saved');
+  } else {
+    try {
+      const r = await fetch('/api/score', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name, mcap, height, zone, token: scoreToken }),
+      });
+      if (!r.ok) console.warn('score rejected:', r.status, await r.text().catch(()=>''));
+    } catch (e) {
+      console.warn('score post failed:', e.message);
+    }
+    scoreToken = null;   // single-use locally too
   }
   // re-fetch authoritative list
   fetchLeaderboard().then(list => {
@@ -2048,6 +2071,8 @@ function start() {
   const v = (inp.value || '').trim().toUpperCase().slice(0, 14);
   playerName = v || 'ANON';
   localStorage.setItem('chungus.name', playerName);
+  // fetch a fresh score-submission token at start so the run is timed server-side
+  fetchScoreToken();
   initAudio();
   clearSfxTimeouts();
   recentTones = [];
