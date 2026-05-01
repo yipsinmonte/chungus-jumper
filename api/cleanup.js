@@ -29,8 +29,12 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: 'forbidden' });
     }
 
-    // remove entries with absurd mcap by score (sorted-set range)
-    const removedByScore = await kv.zremrangebyscore('chungus:lb', MAX_MCAP + 1, '+inf');
+    // optional surgical threshold via ?above=N (defaults to MAX_MCAP)
+    const url = new URL(req.url, `http://${req.headers.host || 'x'}`);
+    const aboveParam = parseInt(url.searchParams.get('above') || '', 10);
+    const threshold = Number.isFinite(aboveParam) && aboveParam > 0 ? aboveParam : MAX_MCAP;
+    // remove entries with mcap > threshold (sorted-set range)
+    const removedByScore = await kv.zremrangebyscore('chungus:lb', threshold + 1, '+inf');
 
     // also walk the rest and prune any malformed JSON or out-of-bounds height
     const all = await kv.zrange('chungus:lb', 0, -1, { rev: true });

@@ -474,6 +474,7 @@
 </div>
 
 <script>
+(function () {
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 
@@ -2388,6 +2389,29 @@ async function fetchScoreToken() {
   }
 }
 
+// ── heartbeat ─────────────────────────────────────────────
+// Posts current mcap/height every 2s while alive + visible. Server uses these
+// to track effective play time (capped per-gap so alt-tab can't extend it) and
+// to validate the final score against the trajectory.
+let heartbeatTimer = null;
+function startHeartbeat() {
+  stopHeartbeat();
+  heartbeatTimer = setInterval(() => {
+    if (!started || !alive || !scoreToken || document.hidden) return;
+    const h = Math.max(0, Math.floor(-highestY / 10));
+    const m = currentMcap();
+    fetch('/api/beat', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ token: scoreToken, mcap: m, height: h }),
+    }).catch(() => {});
+  }, 2000);
+}
+function stopHeartbeat() {
+  if (heartbeatTimer) clearInterval(heartbeatTimer);
+  heartbeatTimer = null;
+}
+
 async function fetchLeaderboard() {
   try {
     const r = await fetch('/api/leaderboard', { cache: 'no-store' });
@@ -2475,7 +2499,7 @@ function start() {
   playerName = v || 'ANON';
   localStorage.setItem('chungus.name', playerName);
   // fetch a fresh score-submission token at start so the run is timed server-side
-  fetchScoreToken();
+  fetchScoreToken().then(() => startHeartbeat());
   initAudio();
   clearSfxTimeouts();
   recentTones = [];
@@ -2490,6 +2514,7 @@ function start() {
 let lastScoreTimestamp = null;
 async function gameOver() {
   stopMusic();
+  stopHeartbeat();
   currentMusicZone = -1;
   const heightM = Math.max(0, Math.floor(-highestY / 10));
   const collected = coinsCollected;
@@ -2588,6 +2613,8 @@ setInterval(() => {
 // boot
 reset();
 loop();
+
+})();
 </script>
 </body>
 </html>

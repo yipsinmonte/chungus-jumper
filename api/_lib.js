@@ -2,10 +2,12 @@ import { kv } from '@vercel/kv';
 import crypto from 'node:crypto';
 
 export const MAX_NAME = 14;
-export const MAX_MCAP = 50_000_000;          // $50M absolute cap (top legit ~$1.6M)
-export const MAX_MCAP_PER_SEC = 50_000;      // realistic gameplay rate
+export const MAX_MCAP = 25_000_000;          // loose paranoia ceiling — real bound comes from heartbeat-effective time
+export const MAX_MCAP_PER_SEC = 30_000;      // realistic gameplay rate, applied to EFFECTIVE play time (not wall-clock)
+export const MAX_HEIGHT_PER_SEC = 60;        // even with rocket/idf giga-bounce, ~1m per 16ms = 60 m/s max sustained
 export const MIN_PLAY_MS = 5_000;            // shortest plausible run
-export const MAX_TOKEN_AGE_MS = 30 * 60 * 1000;
+export const MAX_TOKEN_AGE_MS = 6 * 60 * 1000;   // 6 min — way longer than any realistic single run
+export const BEAT_GAP_CAP_MS = 4_000;        // alt-tab gaps beyond this don't add to effective time
 export const LB_SIZE = 100;
 export const RATE_LIMIT_PER_HOUR = 60;
 
