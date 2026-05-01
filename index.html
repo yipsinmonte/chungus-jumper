@@ -1097,9 +1097,34 @@ function spawnPowerup(y) {
                  'pumpcandle','pumpcandle', 'pill','pill','pill',
                  'alon','alon','alon', 'trump','trump','trump'];
   const type = types[Math.floor(Math.random() * types.length)];
-  const x = 30 + Math.random() * (VW() - 80);
-  const size = (type === 'pill' || type === 'alon') ? 48 : 38;
-  powerups.push({ x, y: y - 40, w: size, h: size, type, collected: false, born: gameTime });
+  const size = (type === 'pill' || type === 'alon' || type === 'trump') ? 56 : 38;
+  // place "headline" pickups (pill / alon / trump) hovering directly above the
+  // closest platform near y, so they're squarely on the jump path. Other powerups
+  // keep the wider sideways spread so they still feel scattered.
+  const onPlatform = (type === 'pill' || type === 'alon' || type === 'trump');
+  let px, py;
+  if (onPlatform) {
+    // pick the platform whose y is closest to spawn y (within a window)
+    let best = null, bestDist = Infinity;
+    for (const p of platforms) {
+      if (p.type === 'red') continue;
+      const d = Math.abs(p.y - y);
+      if (d < bestDist && d < 200) { best = p; bestDist = d; }
+    }
+    if (best) {
+      px = best.x + best.w/2 - size/2;
+      py = best.y - size - 18;            // float just above the platform
+    } else {
+      // no platform nearby: drop in the center 50% of the screen
+      const margin = VW() * 0.25;
+      px = margin + Math.random() * (VW() - margin * 2 - size);
+      py = y - 40;
+    }
+  } else {
+    px = 30 + Math.random() * (VW() - 80);
+    py = y - 40;
+  }
+  powerups.push({ x: px, y: py, w: size, h: size, type, collected: false, born: gameTime });
 }
 
 function currentMcap() {
