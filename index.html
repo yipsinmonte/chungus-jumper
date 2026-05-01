@@ -813,6 +813,18 @@ magaImg.onload = () => { magaReady = true; };
 magaImg.onerror = () => { magaReady = false; };
 magaImg.src = 'maga.jpg';
 
+const idfImg = new Image();
+let idfReady = false;
+idfImg.onload = () => { idfReady = true; };
+idfImg.onerror = () => { idfReady = false; };
+idfImg.src = 'idf.png';
+
+const carrotImg = new Image();
+let carrotReady = false;
+carrotImg.onload = () => { carrotReady = true; };
+carrotImg.onerror = () => { carrotReady = false; };
+carrotImg.src = 'carrot.jpg';
+
 let W, H;
 function resize() {
   const dpr = window.devicePixelRatio || 1;
@@ -870,6 +882,7 @@ function reset() {
              shieldUntil: 0, rocketUntil: 0, slowfallUntil: 0,
              bigUntil: 0, alonStart: 0,
              magaUntil: 0, magaBonus: 0, magaLastMcap: 0,
+             idfUntil: 0,
              deathFreezeUntil: 0, deathCause: '' };
   platforms = [];
   coins = [];
@@ -1149,16 +1162,18 @@ function spawnJeetShark() {
 
 // Power-up: rocket (carrot), shield (diamond), slowfall (bonk hat), pumpcandle, pill (3x), alon (rug)
 function spawnPowerup(y) {
-  // weighted: pill / alon / trump match alon frequency
+  // weighted: pill / alon / trump / idf match alon frequency
   const types = ['rocket','rocket', 'shield','shield', 'slowfall','slowfall',
                  'pumpcandle','pumpcandle', 'pill','pill','pill',
-                 'alon','alon','alon', 'trump','trump','trump'];
+                 'alon','alon','alon', 'trump','trump','trump',
+                 'idf','idf','idf'];
   const type = types[Math.floor(Math.random() * types.length)];
-  const size = (type === 'pill' || type === 'alon' || type === 'trump') ? 56 : 38;
-  // place "headline" pickups (pill / alon / trump) hovering directly above the
-  // closest platform near y, so they're squarely on the jump path. Other powerups
-  // keep the wider sideways spread so they still feel scattered.
-  const onPlatform = (type === 'pill' || type === 'alon' || type === 'trump');
+  const headline = (type === 'pill' || type === 'alon' || type === 'trump' || type === 'idf');
+  const size = headline ? 56 : 38;
+  // place "headline" pickups hovering directly above the closest platform near y,
+  // so they're squarely on the jump path. Other powerups keep the wider sideways
+  // spread so they still feel scattered.
+  const onPlatform = headline;
   let px, py;
   if (onPlatform) {
     // pick the platform whose y is closest to spawn y (within a window)
@@ -1327,6 +1342,8 @@ function update(dt) {
 
   // platform collisions (only when falling)
   if (player.vy > 0) {
+    // BIG TITTY BOUNCE: 1.8x jump impulse for 10s after IDF pickup
+    const bounceMult = (gameTime < player.idfUntil) ? 1.8 : 1.0;
     for (const p of platforms) {
       if (p.type === 'breakaway' && p.used) continue;
       const px = player.x + player.w/2;
@@ -1341,17 +1358,17 @@ function update(dt) {
           gameOver(); return;
         }
         if (p.type === 'spring') {
-          player.vy = JUMP_GOLD;
+          player.vy = JUMP_GOLD * bounceMult;
           emit(p.x + p.w/2, p.y, '#fffb00', 16);
           SFX.springBounce();
         } else if (p.type === 'breakaway') {
-          player.vy = JUMP_V;
+          player.vy = JUMP_V * bounceMult;
           p.used = true;
           p.alpha = 1;
           emit(p.x + p.w/2, p.y, '#cc88ff', 14);
           SFX.breakBounce();
         } else {
-          player.vy = JUMP_V;
+          player.vy = JUMP_V * bounceMult;
           if (!p.hit) { p.hit = true; emit(p.x + p.w/2, p.y, '#88ff44', 8); }
           SFX.bounce();
         }
@@ -1533,6 +1550,14 @@ function update(dt) {
         emit(player.x + player.w/2, player.y + player.h/2, '#ffffff', 30);
         shake(10);
         SFX.eagleScreech();
+      }
+      if (pu.type === 'idf') {
+        // BIG TITTY BOUNCE — 10s of giga-bounce on every platform contact + carrot bg
+        player.idfUntil = gameTime + 600;
+        emit(player.x + player.w/2, player.y + player.h/2, '#ff8844', 40);
+        emit(player.x + player.w/2, player.y + player.h/2, '#ffaa66', 30);
+        shake(12);
+        SFX.springBounce();
       }
     }
   }
@@ -1760,10 +1785,13 @@ function draw() {
   const zIdx = currentZone();
   const zImg = zoneImgs[zIdx];
 
-  // MAGA mode override — paint maga.jpg cover-fit over the zone bg
+  // MAGA / IDF mode bg overrides — paint cover-fit over the zone bg
   const inMaga = gameTime < player.magaUntil;
-  if (inMaga && magaReady && magaImg.naturalWidth > 0) {
-    const ia = magaImg.naturalHeight / magaImg.naturalWidth;
+  const inIdf  = gameTime < player.idfUntil;
+  const overrideImg = inIdf ? carrotImg : (inMaga ? magaImg : null);
+  const overrideReady = inIdf ? carrotReady : (inMaga ? magaReady : false);
+  if (overrideImg && overrideReady && overrideImg.naturalWidth > 0) {
+    const ia = overrideImg.naturalHeight / overrideImg.naturalWidth;
     const ca = VH() / VW();
     let dw, dh, dx, dy;
     if (ia > ca) {
@@ -1773,12 +1801,10 @@ function draw() {
       dh = VH(); dw = dh / ia;
       dy = 0; dx = (VW() - dw) / 2;
     }
-    // pulse alpha so it feels alive
     const pulse = 0.78 + 0.08 * Math.sin(gameTime * 0.2);
     ctx.globalAlpha = pulse;
-    ctx.drawImage(magaImg, dx, dy, dw, dh);
+    ctx.drawImage(overrideImg, dx, dy, dw, dh);
     ctx.globalAlpha = 1;
-    // darken so neon platforms pop clearly
     ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
     ctx.fillRect(0, 0, VW(), VH());
   } else if (zImg && zImg.ready && zImg.naturalWidth > 0) {
@@ -2013,6 +2039,7 @@ function draw() {
     if (pu.type === 'pill')        { icon = '💊'; color = '#ff44ff'; img = pillImg; ready = pillReady; }
     if (pu.type === 'alon')        { icon = '🚀'; color = '#22ddff'; img = alonImg; ready = alonReady; }
     if (pu.type === 'trump')       { icon = '🇺🇸'; color = '#ff2222'; img = trumpImg; ready = trumpReady; }
+    if (pu.type === 'idf')         { icon = '🥕'; color = '#ff8844'; img = idfImg;   ready = idfReady; }
 
     ctx.save();
     ctx.shadowColor = color;
@@ -2174,6 +2201,54 @@ function draw() {
     ctx.font = `700 ${VW() < 600 ? 16 : 22}px "Courier New", monospace`;
     ctx.fillStyle = '#ffff00';
     ctx.fillText(`${remain.toFixed(1)}s`, cx, cy + big * 0.7 + 18);
+    ctx.restore();
+  }
+
+  // ── BIG TITTY BOUNCE banner ────────────────────────────────
+  if (gameTime < player.idfUntil && alive) {
+    const remain = Math.max(0, (player.idfUntil - gameTime) / 60);
+    const big = VW() < 600 ? 32 : 54;
+    const cx = VW() / 2;
+    const cy = 70;
+    const t = gameTime;
+
+    ctx.save();
+    // dark stripe so platforms still read
+    ctx.fillStyle = `rgba(0, 0, 0, 0.55)`;
+    ctx.fillRect(0, cy - big * 0.7, VW(), big * 1.5);
+    // orange/yellow accent strip (carrot vibes)
+    const stripH = 4;
+    const stripY = cy + big * 0.65;
+    ctx.fillStyle = '#ff8844'; ctx.fillRect(0, stripY,            VW(), stripH);
+    ctx.fillStyle = '#ffaa44'; ctx.fillRect(0, stripY + stripH,   VW(), stripH);
+    ctx.fillStyle = '#ffdd00'; ctx.fillRect(0, stripY + stripH*2, VW(), stripH);
+
+    // bouncy scale wobble — feels apt
+    const bounce = 1 + Math.sin(t * 0.4) * 0.08;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = `900 ${big * bounce}px "Comic Neue", "Comic Sans MS", cursive`;
+
+    // chromatic offsets in carrot tones
+    ctx.fillStyle = '#ff4400';
+    ctx.fillText('BIG TITTY BOUNCE APPLIED', cx - 4, cy);
+    ctx.fillStyle = '#ffaa00';
+    ctx.fillText('BIG TITTY BOUNCE APPLIED', cx + 4, cy);
+
+    // main yellow text + black stroke + orange glow
+    ctx.shadowColor = '#ff8844';
+    ctx.shadowBlur = 30;
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = '#000';
+    ctx.strokeText('BIG TITTY BOUNCE APPLIED', cx, cy);
+    ctx.fillStyle = '#fff200';
+    ctx.fillText('BIG TITTY BOUNCE APPLIED', cx, cy);
+
+    // countdown
+    ctx.shadowBlur = 12;
+    ctx.font = `700 ${VW() < 600 ? 16 : 22}px "Courier New", monospace`;
+    ctx.fillStyle = '#ffdd44';
+    ctx.fillText(`1.8x JUMP · ${remain.toFixed(1)}s`, cx, cy + big * 0.7 + 18);
     ctx.restore();
   }
 
