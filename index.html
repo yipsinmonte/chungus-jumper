@@ -6,20 +6,25 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Major+Mono+Display&family=Playfair+Display:ital,wght@1,600&family=Space+Grotesk:wght@500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Comic+Neue:wght@400;700&family=Major+Mono+Display&family=Playfair+Display:ital,wght@1,600&family=Space+Grotesk:wght@500&display=swap" rel="stylesheet">
 <style>
   :root {
-    --pink: #ff44aa;
-    --pink-soft: #ff8fd0;
-    --yellow: #fffb00;
+    --magenta: #ff00ff;
+    --cyan: #00ffff;
+    --yellow: #ffff00;
+    --green: #00ff00;
+    --red: #ff4444;
     --bg: #0a0410;
+    --panel: #000033;
+    --panel-deep: #000022;
+    --panel-mid: #000044;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body {
     margin: 0; padding: 0;
     background: var(--bg);
     color: #fff;
-    font-family: "Space Grotesk", sans-serif;
+    font-family: "Comic Neue", "Comic Sans MS", cursive;
     height: 100vh; overflow: hidden;
     user-select: none;
     touch-action: none;
@@ -43,253 +48,318 @@
     z-index: 5;
   }
 
+  /* ===== keyframes (chungus.site) ===== */
+  @keyframes rainbow {
+    0%   { color: #ff0000; }
+    14%  { color: #ff8800; }
+    28%  { color: #ffff00; }
+    42%  { color: #00ff00; }
+    57%  { color: #0088ff; }
+    71%  { color: #8800ff; }
+    85%  { color: #ff00ff; }
+    100% { color: #ff0000; }
+  }
+  @keyframes glow {
+    0%, 100% { text-shadow: 0 0 10px #ff00ff, 0 0 20px #ff00ff, 0 0 40px #ff00ff; }
+    50%       { text-shadow: 0 0 20px #00ffff, 0 0 40px #00ffff, 0 0 80px #00ffff; }
+  }
+  @keyframes blink { 0%, 100% { visibility: visible; } 50% { visibility: hidden; } }
+  @keyframes wobble {
+    0%, 100% { transform: rotate(-2deg) scale(1); }
+    50%       { transform: rotate(2deg)  scale(1.04); }
+  }
+  @keyframes livepulse {
+    0%, 100% { box-shadow: 0 0 14px #ff00ff88, inset 0 0 10px #ff00ff44; }
+    50%       { box-shadow: 0 0 22px #00ffffaa, inset 0 0 10px #00ffff44; }
+  }
+
   /* HUD */
   .hud {
-    position: fixed; top: 18px; left: 0; right: 0;
+    position: fixed; top: 14px; left: 0; right: 0;
     display: flex; justify-content: space-between; align-items: flex-start;
-    padding: 0 22px;
+    padding: 0 16px;
     z-index: 10;
     pointer-events: none;
   }
   .hud-block {
-    background: rgba(10,4,16,0.5);
-    border: 1px solid rgba(255,143,208,0.18);
-    padding: 8px 14px;
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
+    background: var(--panel-mid);
+    border: 3px solid var(--magenta);
+    padding: 6px 12px;
+    box-shadow: 0 0 14px #ff00ff88, inset 0 0 10px #ff00ff44;
   }
   .label {
-    font-family: "Major Mono Display", monospace;
-    font-size: 10px;
-    letter-spacing: 6px;
-    color: var(--pink-soft);
-    text-transform: lowercase;
+    font-family: "Comic Neue", "Comic Sans MS", cursive;
+    font-weight: 700;
+    font-size: 11px;
+    letter-spacing: 2px;
+    color: var(--cyan);
+    text-transform: uppercase;
+    text-shadow: 0 0 6px #00ffff;
     margin-bottom: 2px;
   }
   .mcap-num {
-    font-family: "Bebas Neue", sans-serif;
-    font-size: 36px;
+    font-family: "Courier New", monospace;
+    font-weight: bold;
+    font-size: 28px;
     line-height: 1;
-    letter-spacing: 2px;
     color: var(--yellow);
-    text-shadow: 0 0 18px rgba(255,251,0,0.4);
+    text-shadow: 0 0 10px #ffff0099;
     font-variant-numeric: tabular-nums;
   }
   .height-num {
-    font-family: "Bebas Neue", sans-serif;
-    font-size: 28px;
+    font-family: "Courier New", monospace;
+    font-weight: bold;
+    font-size: 22px;
     line-height: 1;
-    color: #fff;
+    color: var(--yellow);
+    text-shadow: 0 0 8px #ffff0066;
     font-variant-numeric: tabular-nums;
   }
 
-  /* Title screen */
+  /* Title / overlay screens */
   .screen {
     position: fixed; inset: 0;
     display: flex; flex-direction: column;
     align-items: center; justify-content: center;
     z-index: 20;
-    background: radial-gradient(ellipse 70% 55% at 50% 50%, rgba(60,8,42,0.85), rgba(8,2,14,0.96));
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    background-color: var(--panel);
+    background-image:
+      radial-gradient(circle, #ff00ff33 1px, transparent 1px),
+      radial-gradient(circle, #00ffff22 1px, transparent 1px);
+    background-size: 40px 40px, 20px 20px;
     text-align: center;
     padding: 32px;
+    overflow-y: auto;
   }
   .screen.hidden { display: none; }
   .eyebrow {
-    font-family: "Major Mono Display", monospace;
-    font-size: 12px;
-    letter-spacing: 14px;
-    color: var(--pink-soft);
-    text-transform: lowercase;
-    margin-bottom: 22px;
+    font-family: "Comic Neue", cursive;
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 4px;
+    color: var(--cyan);
+    text-transform: uppercase;
+    text-shadow: 0 0 8px #00ffff;
+    margin-bottom: 14px;
+    animation: blink 1.2s step-start infinite;
   }
   h1 {
-    font-family: "Bebas Neue", sans-serif;
-    font-size: 18vw;
-    max-font-size: 180px;
-    line-height: 0.82;
-    letter-spacing: 6px;
-    background: linear-gradient(180deg, #fff 0%, #ffd0ee 40%, var(--pink) 95%);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-    text-shadow: 0 0 36px rgba(255,68,170,0.3);
-    filter: drop-shadow(0 0 22px rgba(255,68,170,0.55));
+    font-family: "Comic Neue", "Comic Sans MS", cursive;
+    font-weight: 700;
+    font-size: clamp(56px, 14vw, 140px);
+    line-height: 0.95;
+    letter-spacing: 4px;
     text-transform: uppercase;
     margin: 0;
+    animation: glow 1.5s ease-in-out infinite, rainbow 1.2s linear infinite;
+    -webkit-text-stroke: 2px #000;
   }
   .tag {
-    font-family: "Playfair Display", serif;
-    font-style: italic;
-    font-size: 22px;
-    color: #ffd0ee;
-    margin: 18px 0 36px;
-    letter-spacing: 0.5px;
+    font-family: "Comic Neue", cursive;
+    font-weight: 700;
+    font-size: 18px;
+    color: var(--yellow);
+    margin: 16px 0 26px;
+    letter-spacing: 1px;
+    text-shadow: 0 0 8px #ff00ff, 1px 1px 0 #000;
   }
   .btn {
-    font-family: "Bebas Neue", sans-serif;
-    font-size: 38px;
-    letter-spacing: 6px;
-    color: var(--bg);
-    background: var(--yellow);
-    padding: 18px 44px;
-    border: none;
+    font-family: "Comic Neue", "Comic Sans MS", cursive;
+    font-weight: 700;
+    font-size: 28px;
+    letter-spacing: 4px;
+    color: var(--yellow);
+    background: linear-gradient(180deg, #ff00ff, #660099);
+    padding: 14px 36px;
+    border: 4px outset var(--magenta);
     cursor: pointer;
     text-transform: uppercase;
-    box-shadow: 0 0 32px rgba(255,251,0,0.5);
-    transition: transform 0.15s;
+    text-shadow: 0 0 8px #ff00ff, 2px 2px 0 #000;
+    box-shadow: 0 0 24px #ff00ff88;
     margin: 6px;
+    transition: transform 0.1s;
   }
-  .btn:hover, .btn:active { transform: scale(1.05); }
+  .btn:hover, .btn:active {
+    background: linear-gradient(180deg, #ff66ff, #aa00aa);
+    border-style: inset;
+    transform: scale(1.03);
+  }
   .btn.ghost {
-    background: transparent;
-    color: var(--pink-soft);
-    border: 1px solid var(--pink-soft);
-    box-shadow: none;
+    background: linear-gradient(180deg, #003366, #001133);
+    border: 3px outset var(--cyan);
+    color: var(--cyan);
+    text-shadow: 0 0 8px #00ffff, 2px 2px 0 #000;
+    box-shadow: 0 0 18px #00ffff66;
+    font-size: 22px;
+    padding: 12px 28px;
+  }
+  .btn.ghost:hover, .btn.ghost:active {
+    background: linear-gradient(180deg, #0088dd, #003377);
+    border-style: inset;
   }
 
   .controls {
-    margin-top: 24px;
-    font-family: "Major Mono Display", monospace;
-    font-size: 11px;
-    letter-spacing: 4px;
-    color: var(--pink-soft);
-    opacity: 0.7;
+    margin-top: 20px;
+    font-family: "Courier New", monospace;
+    font-size: 12px;
+    letter-spacing: 2px;
+    color: var(--cyan);
+    text-shadow: 0 0 6px #00ffff;
+    text-transform: uppercase;
   }
   .name-input {
-    background: rgba(10,4,16,0.5);
-    border: 1px solid rgba(255,143,208,0.4);
-    color: #fff;
-    font-family: "Bebas Neue", sans-serif;
-    font-size: 28px;
-    letter-spacing: 4px;
+    background: var(--panel-deep);
+    border: 3px solid var(--magenta);
+    color: var(--yellow);
+    font-family: "Comic Neue", cursive;
+    font-weight: 700;
+    font-size: 22px;
+    letter-spacing: 3px;
     text-align: center;
     text-transform: uppercase;
-    padding: 12px 22px;
+    padding: 10px 20px;
     width: min(320px, 70vw);
     outline: none;
-    margin-bottom: 18px;
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
-    transition: border-color 0.15s, box-shadow 0.15s;
+    margin-bottom: 16px;
+    box-shadow: inset 0 0 12px #ff00ff44, 0 0 18px #ff00ff66;
+    text-shadow: 0 0 6px #ffff00aa;
+    transition: box-shadow 0.15s;
   }
   .name-input:focus {
-    border-color: var(--pink-soft);
-    box-shadow: 0 0 24px rgba(255,143,208,0.4);
+    box-shadow: inset 0 0 14px #ff00ff66, 0 0 28px #ff00ffaa;
   }
-  .name-input::placeholder { color: rgba(255,143,208,0.5); }
+  .name-input::placeholder { color: #ff88dd; opacity: 0.6; }
+
+  /* Leaderboard */
   .lb-wrap {
-    margin-top: 38px;
-    width: min(420px, 88vw);
-    background: rgba(10,4,16,0.55);
-    border: 1px solid rgba(255,143,208,0.18);
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
-    padding: 16px 18px 14px;
+    margin-top: 30px;
+    width: min(440px, 90vw);
+    background: var(--panel-mid);
+    border: 4px solid var(--magenta);
+    box-shadow: 0 0 24px #ff00ff77, inset 0 0 12px #ff00ff33;
+    padding: 12px 16px 14px;
   }
   .lb-wrap.empty { display: none; }
   .lb-title {
-    font-family: "Major Mono Display", monospace;
-    font-size: 12px;
-    letter-spacing: 8px;
-    color: var(--pink-soft);
+    font-family: "Comic Neue", cursive;
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: 4px;
+    color: var(--cyan);
     text-align: center;
     margin-bottom: 10px;
-    text-transform: lowercase;
+    text-transform: uppercase;
+    text-shadow: 0 0 8px #00ffff;
+    border-bottom: 2px dashed var(--magenta);
+    padding-bottom: 6px;
   }
   .lb-list {
     list-style: none; padding: 0; margin: 0;
-    font-family: "Space Grotesk", sans-serif;
   }
   .lb-list li {
     display: flex;
     justify-content: space-between;
     align-items: baseline;
-    padding: 6px 0;
-    border-bottom: 1px solid rgba(255,143,208,0.08);
-    font-size: 16px;
+    padding: 5px 0;
+    border-bottom: 1px dotted #ff00ff66;
+    font-size: 15px;
     color: #fff;
   }
   .lb-list li:last-child { border-bottom: none; }
   .lb-list .rank {
-    font-family: "Major Mono Display", monospace;
-    font-size: 11px;
-    color: var(--pink-soft);
+    font-family: "Courier New", monospace;
+    font-weight: bold;
+    font-size: 12px;
+    color: var(--cyan);
+    text-shadow: 0 0 4px #00ffff;
     width: 26px;
   }
   .lb-list .lbname {
     flex: 1;
+    font-family: "Comic Neue", cursive;
+    font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 1px;
-    font-weight: 500;
     margin: 0 8px;
+    color: #fff;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
   .lb-list .lbscore {
-    font-family: "Bebas Neue", sans-serif;
-    font-size: 22px;
+    font-family: "Courier New", monospace;
+    font-size: 16px;
+    font-weight: bold;
     color: var(--yellow);
     letter-spacing: 1px;
+    text-shadow: 0 0 6px #ffff0088;
     font-variant-numeric: tabular-nums;
   }
   .lb-list li.me {
-    background: rgba(255,251,0,0.08);
+    background: #220033;
     padding-left: 8px; padding-right: 8px;
     margin: 0 -8px;
+    box-shadow: inset 0 0 8px #ff00ff66;
   }
 
   /* Game over */
-  .gameover h1 { font-size: 11vw; line-height: 0.9; }
+  .gameover h1 { font-size: clamp(40px, 9vw, 88px); line-height: 0.9; }
   .wincard {
     width: auto;
     max-width: 92vw;
-    max-height: 64vh;
+    max-height: 60vh;
     height: auto;
     display: block;
     margin: 0 auto;
-    border: 1px solid rgba(255,143,208,0.35);
-    box-shadow: 0 0 60px rgba(255,68,170,0.35), 0 20px 40px rgba(0,0,0,0.5);
+    border: 4px solid var(--magenta);
+    box-shadow: 0 0 40px #ff00ff99, inset 0 0 12px #ff00ff44;
     image-rendering: -webkit-optimize-contrast;
   }
   .go-actions {
-    display: flex; flex-wrap: wrap; justify-content: center; gap: 0;
-    margin-top: 22px;
+    display: flex; flex-wrap: wrap; justify-content: center; gap: 4px;
+    margin-top: 18px;
   }
   .go-hint {
-    margin-top: 14px;
-    font-family: "Major Mono Display", monospace;
-    font-size: 11px; letter-spacing: 4px;
-    color: var(--pink-soft);
-    opacity: 0.6;
-    text-transform: lowercase;
+    margin-top: 12px;
+    font-family: "Courier New", monospace;
+    font-size: 12px; letter-spacing: 2px;
+    color: var(--cyan);
+    text-shadow: 0 0 6px #00ffff;
+    text-transform: uppercase;
+    animation: blink 1.5s step-start infinite;
   }
   .final {
-    margin: 10px 0 20px;
-    font-family: "Bebas Neue", sans-serif;
-    font-size: 96px;
-    letter-spacing: 4px;
+    margin: 8px 0 18px;
+    font-family: "Comic Neue", cursive;
+    font-weight: 700;
+    font-size: 72px;
+    letter-spacing: 3px;
     color: var(--yellow);
-    text-shadow: 0 0 24px rgba(255,251,0,0.5);
+    text-shadow: 0 0 16px #ffff00aa, 2px 2px 0 #000;
     line-height: 1;
   }
   .final-label {
-    font-family: "Major Mono Display", monospace;
-    font-size: 12px;
-    letter-spacing: 8px;
-    color: var(--pink-soft);
-    text-transform: lowercase;
-    margin-bottom: 6px;
+    font-family: "Comic Neue", cursive;
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 4px;
+    color: var(--cyan);
+    text-transform: uppercase;
+    text-shadow: 0 0 6px #00ffff;
+    margin-bottom: 4px;
   }
 
-  /* Mobile touch hint */
+  /* Mobile */
   @media (max-width: 700px) {
-    h1 { font-size: 20vw; }
-    .tag { font-size: 18px; }
-    .gameover h1 { font-size: 13vw; }
-    .final { font-size: 64px; }
+    h1 { font-size: 18vw; }
+    .tag { font-size: 16px; }
+    .gameover h1 { font-size: 12vw; }
+    .final { font-size: 52px; }
+    .btn { font-size: 22px; padding: 12px 28px; letter-spacing: 3px; }
+    .btn.ghost { font-size: 18px; padding: 10px 22px; }
+    .mcap-num { font-size: 22px; }
+    .height-num { font-size: 18px; }
+    .hud-block { padding: 5px 10px; }
   }
 </style>
 </head>
