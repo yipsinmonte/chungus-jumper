@@ -120,7 +120,8 @@
   .screen {
     position: fixed; inset: 0;
     display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
+    align-items: center;
+    justify-content: safe center;
     z-index: 20;
     background-color: var(--panel);
     background-image:
@@ -128,8 +129,9 @@
       radial-gradient(circle, #00ffff22 1px, transparent 1px);
     background-size: 40px 40px, 20px 20px;
     text-align: center;
-    padding: 32px;
+    padding: 24px;
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
   .screen.hidden { display: none; }
   .eyebrow {
@@ -232,12 +234,16 @@
 
   /* Leaderboard */
   .lb-wrap {
-    margin-top: 30px;
+    margin-top: 24px;
     width: min(440px, 90vw);
     background: var(--panel-mid);
     border: 4px solid var(--magenta);
     box-shadow: 0 0 24px #ff00ff77, inset 0 0 12px #ff00ff33;
     padding: 12px 16px 14px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    max-height: min(360px, 50vh);
   }
   .lb-wrap.empty { display: none; }
   .lb-title {
@@ -254,7 +260,19 @@
     padding-bottom: 6px;
   }
   .lb-list {
-    list-style: none; padding: 0; margin: 0;
+    list-style: none; padding: 0 6px 0 0; margin: 0;
+    overflow-y: auto;
+    flex: 1 1 auto;
+    min-height: 0;
+    scrollbar-width: thin;
+    scrollbar-color: var(--magenta) var(--panel-deep);
+  }
+  .lb-list::-webkit-scrollbar { width: 8px; }
+  .lb-list::-webkit-scrollbar-track { background: var(--panel-deep); }
+  .lb-list::-webkit-scrollbar-thumb {
+    background: var(--magenta);
+    border: 1px solid #aa00aa;
+    box-shadow: 0 0 6px #ff00ff;
   }
   .lb-list li {
     display: flex;
@@ -1863,7 +1881,7 @@ async function renderLeaderboard(highlightTimestamp = null) {
   }
   wrap.classList.remove('empty');
   list.innerHTML = '';
-  lb.slice(0, 10).forEach((e, i) => {
+  lb.slice(0, 25).forEach((e, i) => {
     const li = document.createElement('li');
     if (highlightTimestamp && e.t === highlightTimestamp) li.className = 'me';
     li.innerHTML = `
@@ -1873,6 +1891,11 @@ async function renderLeaderboard(highlightTimestamp = null) {
     `;
     list.appendChild(li);
   });
+  // auto-scroll the user's row into view
+  if (highlightTimestamp) {
+    const me = list.querySelector('li.me');
+    if (me) me.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
 }
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -1915,7 +1938,12 @@ function renderGameOverLeaderboard() {
   if (!goLb) return;
   goLb.innerHTML = '';
   const lb = cachedLb || [];
-  lb.slice(0, 5).forEach((e, i) => {
+  const topN = 25;
+  const top = lb.slice(0, topN);
+  const meIdx = lb.findIndex(e => e.t === lastScoreTimestamp);
+  const meInTop = meIdx >= 0 && meIdx < topN;
+
+  top.forEach((e, i) => {
     const li = document.createElement('li');
     if (e.t === lastScoreTimestamp) li.className = 'me';
     li.innerHTML = `
@@ -1925,6 +1953,27 @@ function renderGameOverLeaderboard() {
     `;
     goLb.appendChild(li);
   });
+
+  // append user's row if outside top N
+  if (meIdx >= topN) {
+    const sep = document.createElement('li');
+    sep.style.cssText = 'opacity:0.5;justify-content:center;letter-spacing:8px;border:none;';
+    sep.innerHTML = '<span>· · ·</span>';
+    goLb.appendChild(sep);
+    const e = lb[meIdx];
+    const li = document.createElement('li');
+    li.className = 'me';
+    li.innerHTML = `
+      <span class="rank">${String(meIdx+1).padStart(2,'0')}</span>
+      <span class="lbname">${escapeHtml(e.name)}</span>
+      <span class="lbscore">$${Number(e.mcap).toLocaleString()}</span>
+    `;
+    goLb.appendChild(li);
+  }
+
+  // scroll user's row into view
+  const meEl = goLb.querySelector('li.me');
+  if (meEl) meEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
 }
 
 function renderWinCard() {
