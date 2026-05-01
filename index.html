@@ -1759,9 +1759,10 @@ function update(dt) {
 
   // update HUD
   const heightM = Math.max(0, Math.floor(-highestY / 10));
-  // mcap = base height × $1000, with combo multiplier on collected coins (count)
+  // mcap = base height × $1000, with combo multiplier on collected coins (count),
+  // plus casino bonus (running total of blackjack wins/losses, can be negative)
   const collected = coinsCollected;
-  const mcap = heightM * 1000 + collected * 1000 * (comboMult);
+  const mcap = Math.max(0, heightM * 1000 + collected * 1000 * comboMult + (player.casinoBonus | 0));
   document.getElementById('mcap').textContent = '$' + mcap.toLocaleString();
   document.getElementById('height').textContent = heightM.toLocaleString();
 }
@@ -2206,7 +2207,14 @@ function draw() {
     ctx.fill();
     ctx.shadowBlur = 0;
     if (img && ready) {
+      // crop image to a circle so square-framed PNGs (e.g. casino chip) render
+      // as round tokens like the others
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(pu.x + pu.w/2, py + pu.h/2 + bob, pu.w/2, 0, Math.PI*2);
+      ctx.clip();
       ctx.drawImage(img, pu.x, py + bob, pu.w, pu.h);
+      ctx.restore();
     } else {
       ctx.font = `${pu.h * 0.85}px serif`;
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
