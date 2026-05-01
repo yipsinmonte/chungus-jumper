@@ -412,6 +412,122 @@
     animation: blink 1.5s step-start infinite;
   }
 
+  /* Blackjack overlay */
+  .bj-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0, 0, 14, 0.92);
+    z-index: 30;
+    display: flex; align-items: center; justify-content: center;
+    padding: 16px;
+    overflow-y: auto;
+  }
+  .bj-overlay.hidden { display: none; }
+  .bj-felt {
+    background: radial-gradient(ellipse at center, #0a4a25, #042815 75%);
+    border: 4px solid #d4af37;
+    box-shadow: 0 0 36px #d4af3777, inset 0 0 30px rgba(0,0,0,0.55);
+    padding: 22px 22px 18px;
+    width: min(520px, 95vw);
+    text-align: center;
+  }
+  .bj-title {
+    font-family: "Comic Neue", "Comic Sans MS", cursive;
+    font-weight: 700;
+    font-size: 22px;
+    letter-spacing: 6px;
+    color: #d4af37;
+    text-shadow: 0 0 10px #d4af37, 0 0 24px #d4af3744;
+    margin-bottom: 6px;
+  }
+  .bj-status {
+    font-family: "Courier New", monospace;
+    font-size: 12px;
+    letter-spacing: 3px;
+    color: #ffeb88;
+    text-transform: uppercase;
+    margin-bottom: 14px;
+    min-height: 14px;
+  }
+  .bj-area { margin: 10px 0; }
+  .bj-hand-label {
+    font-family: "Courier New", monospace;
+    font-size: 12px;
+    letter-spacing: 3px;
+    color: #ffeb88;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .bj-hand-label span { color: #fff; font-size: 16px; margin-left: 4px; }
+  .bj-hand {
+    display: flex; justify-content: center; flex-wrap: wrap; gap: 8px;
+    min-height: 96px;
+  }
+  .bj-card {
+    width: 60px; height: 88px;
+    background: #fff;
+    border: 2px solid #000;
+    border-radius: 8px;
+    display: flex; flex-direction: column; justify-content: space-between;
+    padding: 5px 7px;
+    font-family: "Times New Roman", serif;
+    font-weight: bold;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.5);
+    animation: bjDeal 0.28s cubic-bezier(.2,.7,.4,1.4);
+  }
+  .bj-card.red   { color: #c00; }
+  .bj-card.black { color: #000; }
+  .bj-card.face-down {
+    background: repeating-linear-gradient(45deg, #6a0e0e 0 6px, #4a0808 6px 12px);
+    color: transparent;
+    border-color: #d4af37;
+  }
+  .bj-card .rank { font-size: 18px; line-height: 1; text-align: left; }
+  .bj-card .suit { font-size: 30px; line-height: 1; align-self: flex-end; }
+  @keyframes bjDeal {
+    from { opacity: 0; transform: translateY(-26px) rotate(-12deg); }
+    to   { opacity: 1; transform: none; }
+  }
+  .bj-actions { margin-top: 14px; display: flex; gap: 10px; justify-content: center; }
+  .bj-btn {
+    font-family: "Comic Neue", "Comic Sans MS", cursive;
+    font-weight: 700;
+    font-size: 22px;
+    letter-spacing: 4px;
+    background: linear-gradient(180deg, #ffd966, #8a7220);
+    color: #1a0a00;
+    border: 3px outset #d4af37;
+    padding: 10px 30px;
+    cursor: pointer;
+    text-transform: uppercase;
+    text-shadow: 1px 1px 0 #ffeb88aa;
+    box-shadow: 0 0 16px #d4af3744;
+  }
+  .bj-btn:hover, .bj-btn:active {
+    background: linear-gradient(180deg, #fff2a0, #b8932a);
+    border-style: inset;
+  }
+  .bj-btn:disabled { opacity: 0.35; cursor: not-allowed; border-style: inset; }
+  .bj-result {
+    margin-top: 14px;
+    font-family: "Comic Neue", "Comic Sans MS", cursive;
+    font-weight: 700;
+    font-size: 26px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    -webkit-text-stroke: 1px #000;
+  }
+  .bj-result.hidden { display: none; }
+  .bj-result.win  { color: #2dff66; text-shadow: 0 0 14px #2dff66, 2px 2px 0 #000; }
+  .bj-result.lose { color: #ff4444; text-shadow: 0 0 14px #ff4444, 2px 2px 0 #000; }
+  .bj-result.push { color: #ffeb88; text-shadow: 0 0 14px #ffeb88, 2px 2px 0 #000; }
+  .bj-stakes {
+    margin-top: 10px;
+    font-family: "Courier New", monospace;
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: #ffeb8888;
+  }
+
   /* Mobile */
   @media (max-width: 700px) {
     h1 { font-size: 18vw; }
@@ -471,6 +587,27 @@
     <button class="btn" id="retry-btn">JUMP AGAIN</button>
   </div>
   <div class="go-hint">screenshot to share your run</div>
+</div>
+
+<div class="bj-overlay hidden" id="bj-overlay">
+  <div class="bj-felt">
+    <div class="bj-title">— BLACKJACK —</div>
+    <div class="bj-status" id="bj-status">your move</div>
+    <div class="bj-area">
+      <div class="bj-hand-label">DEALER · <span id="bj-dealer-total">?</span></div>
+      <div class="bj-hand" id="bj-dealer-hand"></div>
+    </div>
+    <div class="bj-area">
+      <div class="bj-hand-label">YOU · <span id="bj-player-total">0</span></div>
+      <div class="bj-hand" id="bj-player-hand"></div>
+    </div>
+    <div class="bj-actions">
+      <button class="bj-btn" id="bj-hit">HIT</button>
+      <button class="bj-btn" id="bj-stand">STAND</button>
+    </div>
+    <div class="bj-result hidden" id="bj-result"></div>
+    <div class="bj-stakes">WIN +$500K · LOSE −$250K · PUSH NO CHANGE</div>
+  </div>
 </div>
 
 <script>
@@ -826,6 +963,12 @@ carrotImg.onload = () => { carrotReady = true; };
 carrotImg.onerror = () => { carrotReady = false; };
 carrotImg.src = 'carrot.jpg';
 
+const casinoImg = new Image();
+let casinoReady = false;
+casinoImg.onload = () => { casinoReady = true; };
+casinoImg.onerror = () => { casinoReady = false; };
+casinoImg.src = 'casino.png';
+
 let W, H;
 function resize() {
   const dpr = window.devicePixelRatio || 1;
@@ -862,6 +1005,7 @@ const FRICTION = 0.85;
 
 let player, platforms, coins, particles, hazards, sharks, powerups, stars, candles;
 let camera, alive, started, highestY, gameTime;
+let paused = false;
 let nextHazardAt, nextSharkAt, nextPowerupAt;
 let coinsCollected = 0;
 let playerName = localStorage.getItem('chungus.name') || '';
@@ -884,6 +1028,7 @@ function reset() {
              bigUntil: 0, alonStart: 0,
              magaUntil: 0, magaBonus: 0, magaLastMcap: 0,
              idfUntil: 0,
+             casinoBonus: 0,
              deathFreezeUntil: 0, deathCause: '' };
   platforms = [];
   coins = [];
@@ -905,6 +1050,8 @@ function reset() {
   bibiBannerStart = -9999;
   zoneFlash = 0; lastZone = -1; zoneEnterCamera = 0;
   coinsCollected = 0;
+  paused = false;
+  closeBlackjack(true);
   lastPathPlatform = null;
   spawnTier(VH(), 'wide');
   for (let i = 1; i < 10; i++) spawnTier(VH() - i * 110);
@@ -1163,13 +1310,13 @@ function spawnJeetShark() {
 
 // Power-up: rocket (carrot), shield (diamond), slowfall (bonk hat), pumpcandle, pill (3x), alon (rug)
 function spawnPowerup(y) {
-  // weighted: pill / alon / trump / idf match alon frequency
+  // weighted: pill / alon / trump / idf / casino match alon frequency
   const types = ['rocket','rocket', 'shield','shield', 'slowfall','slowfall',
                  'pumpcandle','pumpcandle', 'pill','pill','pill',
                  'alon','alon','alon', 'trump','trump','trump',
-                 'idf','idf','idf'];
+                 'idf','idf','idf', 'casino','casino','casino'];
   const type = types[Math.floor(Math.random() * types.length)];
-  const headline = (type === 'pill' || type === 'alon' || type === 'trump' || type === 'idf');
+  const headline = (type === 'pill' || type === 'alon' || type === 'trump' || type === 'idf' || type === 'casino');
   const size = headline ? 56 : 38;
   // place "headline" pickups hovering directly above the closest platform near y,
   // so they're squarely on the jump path. Other powerups keep the wider sideways
@@ -1252,7 +1399,7 @@ canvas.addEventListener('touchmove', tStart, { passive: false });
 
 // ── game loop ──────────────────────────────────────────────
 function update(dt) {
-  if (!started || !alive) return;
+  if (!started || !alive || paused) return;
 
   // death-freeze (e.g. bibi rug) — give the player time to read the banner
   if (player.deathFreezeUntil) {
@@ -1559,6 +1706,13 @@ function update(dt) {
         emit(player.x + player.w/2, player.y + player.h/2, '#ffaa66', 30);
         shake(12);
         SFX.springBounce();
+      }
+      if (pu.type === 'casino') {
+        emit(player.x + player.w/2, player.y + player.h/2, '#ffeb88', 30);
+        emit(player.x + player.w/2, player.y + player.h/2, '#d4af37', 20);
+        shake(8);
+        SFX.coinChime(3);
+        startBlackjack();
       }
     }
   }
@@ -2041,6 +2195,7 @@ function draw() {
     if (pu.type === 'alon')        { icon = '🚀'; color = '#22ddff'; img = alonImg; ready = alonReady; }
     if (pu.type === 'trump')       { icon = '🇺🇸'; color = '#ff2222'; img = trumpImg; ready = trumpReady; }
     if (pu.type === 'idf')         { icon = '🥕'; color = '#ff8844'; img = idfImg;   ready = idfReady; }
+    if (pu.type === 'casino')      { icon = '🎰'; color = '#ffeb88'; img = casinoImg;ready = casinoReady; }
 
     ctx.save();
     ctx.shadowColor = color;
@@ -2350,7 +2505,7 @@ document.addEventListener('visibilitychange', () => {
   visible = !document.hidden;
   if (!visible) {
     stopMusic();
-  } else if (started && alive) {
+  } else if (started && alive && !paused) {
     lastFrameTime = performance.now();   // reset so we don't get a huge dt jump
     startMusicForZone(currentZone());
   }
@@ -2390,7 +2545,7 @@ let _hbT = null;
 function startHeartbeat() {
   stopHeartbeat();
   _hbT = setInterval(() => {
-    if (!started || !alive || !scoreToken || document.hidden) return;
+    if (!started || !alive || !scoreToken || document.hidden || paused) return;
     fetch('/api/beat', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -2406,6 +2561,162 @@ function stopHeartbeat() {
   if (_hbT) clearInterval(_hbT);
   _hbT = null;
 }
+
+// ── blackjack mini-game (casino chip) ─────────────────────
+let bjState = null;
+const BJ_SUITS = ['♠','♥','♦','♣'];
+const BJ_RANKS = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+
+function bjShuffleDeck() {
+  const d = [];
+  for (const s of BJ_SUITS) for (const r of BJ_RANKS) d.push({ rank: r, suit: s });
+  for (let i = d.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [d[i], d[j]] = [d[j], d[i]];
+  }
+  return d;
+}
+function bjCardValue(c) {
+  if (c.rank === 'A') return 11;
+  if (c.rank === 'J' || c.rank === 'Q' || c.rank === 'K') return 10;
+  return parseInt(c.rank, 10);
+}
+function bjHandTotal(hand) {
+  let t = 0, aces = 0;
+  for (const c of hand) { t += bjCardValue(c); if (c.rank === 'A') aces++; }
+  while (t > 21 && aces > 0) { t -= 10; aces--; }
+  return t;
+}
+
+function startBlackjack() {
+  if (bjState) return;            // already in a hand — guard against double pickup
+  paused = true;
+  stopHeartbeat();
+  stopMusic();
+
+  bjState = {
+    deck: bjShuffleDeck(),
+    player: [],
+    dealer: [],
+    over: false,
+    settled: false,
+  };
+  bjState.player.push(bjState.deck.pop());
+  bjState.dealer.push(bjState.deck.pop());
+  bjState.player.push(bjState.deck.pop());
+  bjState.dealer.push(bjState.deck.pop());
+
+  const ov = document.getElementById('bj-overlay');
+  ov.classList.remove('hidden');
+  document.getElementById('bj-result').classList.add('hidden');
+  document.getElementById('bj-status').textContent = 'your move';
+  document.getElementById('bj-hit').disabled = false;
+  document.getElementById('bj-stand').disabled = false;
+  bjRender(false);
+
+  // natural 21 → auto-stand for the showdown
+  if (bjHandTotal(bjState.player) === 21) {
+    document.getElementById('bj-hit').disabled = true;
+    document.getElementById('bj-stand').disabled = true;
+    setTimeout(() => bjStand(), 700);
+  }
+}
+
+function bjRender(revealDealer) {
+  const isRed = c => c.suit === '♥' || c.suit === '♦';
+  function cardEl(c, faceDown) {
+    const div = document.createElement('div');
+    div.className = 'bj-card ' + (faceDown ? 'face-down' : (isRed(c) ? 'red' : 'black'));
+    if (!faceDown) {
+      const rank = document.createElement('span');
+      rank.className = 'rank'; rank.textContent = c.rank;
+      const suit = document.createElement('span');
+      suit.className = 'suit'; suit.textContent = c.suit;
+      div.appendChild(rank);
+      div.appendChild(suit);
+    }
+    return div;
+  }
+  const ph = document.getElementById('bj-player-hand');
+  const dh = document.getElementById('bj-dealer-hand');
+  ph.innerHTML = ''; dh.innerHTML = '';
+  for (const c of bjState.player) ph.appendChild(cardEl(c, false));
+  for (let i = 0; i < bjState.dealer.length; i++) {
+    dh.appendChild(cardEl(bjState.dealer[i], !revealDealer && i === 1));
+  }
+  document.getElementById('bj-player-total').textContent = bjHandTotal(bjState.player);
+  document.getElementById('bj-dealer-total').textContent =
+    revealDealer ? bjHandTotal(bjState.dealer) : '?';
+}
+
+function bjHit() {
+  if (!bjState || bjState.over) return;
+  bjState.player.push(bjState.deck.pop());
+  bjRender(false);
+  const t = bjHandTotal(bjState.player);
+  if (t > 21) { bjFinish('lose', 'BUST · −$250K'); return; }
+  if (t === 21) {
+    document.getElementById('bj-hit').disabled = true;
+    document.getElementById('bj-stand').disabled = true;
+    setTimeout(() => bjStand(), 500);
+  }
+}
+
+function bjStand() {
+  if (!bjState || bjState.over) return;
+  bjState.over = true;
+  document.getElementById('bj-hit').disabled = true;
+  document.getElementById('bj-stand').disabled = true;
+  document.getElementById('bj-status').textContent = "dealer's turn…";
+
+  function dealerStep() {
+    if (!bjState) return;
+    bjRender(true);
+    if (bjHandTotal(bjState.dealer) < 17) {
+      bjState.dealer.push(bjState.deck.pop());
+      setTimeout(dealerStep, 550);
+      return;
+    }
+    const pt = bjHandTotal(bjState.player);
+    const dt = bjHandTotal(bjState.dealer);
+    if (dt > 21 || pt > dt)      bjFinish('win',  '+$500K MCAP');
+    else if (pt < dt)            bjFinish('lose', '−$250K');
+    else                          bjFinish('push', 'PUSH · NO CHANGE');
+  }
+  setTimeout(dealerStep, 600);
+}
+
+function bjFinish(outcome, msg) {
+  if (!bjState || bjState.settled) return;
+  bjState.settled = true;
+  bjState.over = true;
+  document.getElementById('bj-hit').disabled = true;
+  document.getElementById('bj-stand').disabled = true;
+  document.getElementById('bj-status').textContent = '';
+  const r = document.getElementById('bj-result');
+  r.className = 'bj-result ' + outcome;
+  r.textContent = msg;
+
+  if (outcome === 'win')  { player.casinoBonus += 500_000; SFX.powerupGet(); }
+  if (outcome === 'lose') { player.casinoBonus -= 250_000; SFX.gameOver();   }
+
+  setTimeout(closeBlackjack, 2400);
+}
+
+function closeBlackjack(silent) {
+  const ov = document.getElementById('bj-overlay');
+  if (ov) ov.classList.add('hidden');
+  bjState = null;
+  if (silent) return;            // called from reset() — don't restart audio/heartbeat
+  paused = false;
+  if (started && alive) {
+    startHeartbeat();
+    startMusicForZone(currentZone());
+  }
+}
+
+document.getElementById('bj-hit').addEventListener('click', bjHit);
+document.getElementById('bj-stand').addEventListener('click', bjStand);
 
 async function fetchLeaderboard() {
   try {
@@ -2509,7 +2820,7 @@ async function gameOver() {
     const delta = currentMcap() - player.magaLastMcap;
     if (delta > 0) player.magaBonus += delta;
   }
-  const mcap = heightM * 1000 + collected * 1000 * comboMult + (player.magaBonus | 0);
+  const mcap = Math.max(0, heightM * 1000 + collected * 1000 * comboMult + (player.magaBonus | 0) + (player.casinoBonus | 0));
   const zoneName = ZONES[currentZone()].name;
   document.getElementById('result-name').textContent = playerName || 'ANON';
   document.getElementById('result-mcap').textContent = '$' + mcap.toLocaleString();
