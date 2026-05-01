@@ -43,17 +43,13 @@ export default async function handler(req, res) {
     }
 
     // monotonicity: mcap/height never go backwards in a real run
+    // (per-beat rate caps are NOT enforced here — alon pump / rocket / pumpcandle
+    // can legitimately spike +200k mcap in a single 2s beat. The session-level
+    // avg-rate cap + final-vs-last-beat divergence cap at /api/score catch cheats.)
     if (cleanMcap   < session.lastBeatMcap)   return res.status(400).json({ error: 'mcap regressed' });
     if (cleanHeight < session.lastBeatHeight) return res.status(400).json({ error: 'height regressed' });
 
     const sinceLastMs = Math.min(now - session.lastBeatTime, BEAT_GAP_CAP_MS);
-    const sinceLastSec = Math.max(0.05, sinceLastMs / 1000);
-    const mcapDelta   = cleanMcap   - session.lastBeatMcap;
-    const heightDelta = cleanHeight - session.lastBeatHeight;
-
-    // 2x slack on mcap to allow MAGA bursts; 1.5x on height to allow IDF giga-bounce
-    if (mcapDelta   > sinceLastSec * MAX_MCAP_PER_SEC   * 2.0) return res.status(400).json({ error: 'mcap rate' });
-    if (heightDelta > sinceLastSec * MAX_HEIGHT_PER_SEC * 1.5) return res.status(400).json({ error: 'height rate' });
 
     session.effectiveMs    += sinceLastMs;
     session.lastBeatTime    = now;

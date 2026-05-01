@@ -3,8 +3,8 @@ import crypto from 'node:crypto';
 
 export const MAX_NAME = 14;
 export const MAX_MCAP = 25_000_000;          // loose paranoia ceiling — real bound comes from heartbeat-effective time
-export const MAX_MCAP_PER_SEC = 30_000;      // realistic gameplay rate, applied to EFFECTIVE play time (not wall-clock)
-export const MAX_HEIGHT_PER_SEC = 60;        // even with rocket/idf giga-bounce, ~1m per 16ms = 60 m/s max sustained
+export const MAX_MCAP_PER_SEC = 35_000;      // realistic AVG rate over EFFECTIVE play time (top legit ~25-30k/s)
+export const MAX_HEIGHT_PER_SEC = 80;        // sustained avg incl. rocket / pumpcandle / idf bursts
 export const MIN_PLAY_MS = 5_000;            // shortest plausible run
 export const MAX_TOKEN_AGE_MS = 6 * 60 * 1000;   // 6 min — way longer than any realistic single run
 export const BEAT_GAP_CAP_MS = 4_000;        // alt-tab gaps beyond this don't add to effective time

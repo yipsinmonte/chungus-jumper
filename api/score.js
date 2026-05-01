@@ -58,20 +58,23 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'no heartbeat trace' });
       }
     } else {
-      // 1) final must not diverge wildly from last heartbeat
+      // 1) final must not diverge crazily from last heartbeat (catches late-edit cheats)
+      //    generous burst allowance: alon pump can add ~192k mcap in 1s, rocket can sustain
+      //    96 m/s = 96k/s, MAGA doubles. Allow up to ~10x the avg rate per second of gap.
       const sinceLastMs = Math.min(now - session.lastBeatTime, BEAT_GAP_CAP_MS);
       const sinceLastSec = sinceLastMs / 1000;
-      const allowedMcapGrowth   = sinceLastSec * MAX_MCAP_PER_SEC   * 2.0;   // MAGA slack
-      const allowedHeightGrowth = sinceLastSec * MAX_HEIGHT_PER_SEC * 1.5;   // IDF slack
+      const allowedMcapGrowth   = Math.max(300_000, sinceLastSec * MAX_MCAP_PER_SEC   * 10);
+      const allowedHeightGrowth = Math.max(300,     sinceLastSec * MAX_HEIGHT_PER_SEC * 5);
       if (cleanMcap   > session.lastBeatMcap   + allowedMcapGrowth)   return res.status(400).json({ error: 'mcap diverges from heartbeat' });
       if (cleanHeight > session.lastBeatHeight + allowedHeightGrowth) return res.status(400).json({ error: 'height diverges from heartbeat' });
 
-      // 2) overall effective-time rate cap (heartbeat ms + the allowed tail)
+      // 2) overall avg-rate cap on effective play time (alt-tab doesn't extend this)
+      //    legit top run averages ~25-30k mcap/sec; cap at 35k * 2 = 70k/s avg
       const totalEffectiveSec = (session.effectiveMs + sinceLastMs) / 1000;
-      if (cleanMcap > totalEffectiveSec * MAX_MCAP_PER_SEC * 1.5) {     // 1.5x final slack for combo+MAGA
+      if (cleanMcap > totalEffectiveSec * MAX_MCAP_PER_SEC * 2) {
         return res.status(400).json({ error: 'mcap exceeds effective rate' });
       }
-      if (cleanHeight > totalEffectiveSec * MAX_HEIGHT_PER_SEC * 1.3) {
+      if (cleanHeight > totalEffectiveSec * MAX_HEIGHT_PER_SEC * 2) {
         return res.status(400).json({ error: 'height exceeds effective rate' });
       }
     }
