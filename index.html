@@ -1202,8 +1202,8 @@ function update(dt) {
     player.vy = Math.min(player.vy - 2 * dt, -32);   // hard upward
     if (Math.random() < dt * 2) emit(player.x + player.w/2, player.y + player.h, '#22ddff', 2);
   } else if (inAlonHold) {
-    if (alonAge < 61) {
-      // rug moment — flash + huge particle burst + banner
+    // trigger rug banner once per alon session (robust to dt spikes that skip the [60,61) frame window)
+    if (rugBannerStart < player.alonStart) {
       emit(player.x + player.w/2, player.y + player.h/2, '#ff2266', 60);
       emit(player.x + player.w/2, player.y + player.h/2, '#22ddff', 40);
       shake(20);
