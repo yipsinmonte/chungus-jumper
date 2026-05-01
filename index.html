@@ -1227,16 +1227,16 @@ function update(dt) {
     player.vy = Math.min(player.vy - 2 * dt, -32);   // hard upward
     if (Math.random() < dt * 2) emit(player.x + player.w/2, player.y + player.h, '#22ddff', 2);
   } else if (inAlonHold) {
-    // trigger rug banner once per alon session (robust to dt spikes that skip the [60,61) frame window)
-    if (rugBannerStart < player.alonStart) {
-      emit(player.x + player.w/2, player.y + player.h/2, '#ff2266', 60);
-      emit(player.x + player.w/2, player.y + player.h/2, '#22ddff', 40);
-      shake(20);
-      rugBannerStart = gameTime;
-    }
     // suspended in air: tiny wobble, horizontal momentum bleeds out
     player.vx *= Math.pow(0.85, dt);
     player.vy = Math.sin(alonAge * 0.4) * 0.6;
+    // rug fx fire once when entering hold (banner already scheduled at pickup time)
+    if (!player.alonRugFx) {
+      emit(player.x + player.w/2, player.y + player.h/2, '#ff2266', 60);
+      emit(player.x + player.w/2, player.y + player.h/2, '#22ddff', 40);
+      shake(20);
+      player.alonRugFx = 1;
+    }
   } else if (inAlonCrash) {
     player.vy = 60;          // crash down
   } else if (inRocket) {
@@ -1245,7 +1245,7 @@ function update(dt) {
   } else {
     player.vy += (inSlowfall ? GRAVITY * 0.45 : GRAVITY) * dt;
   }
-  if (player.alonStart && alonAge >= 210) player.alonStart = 0;
+  if (player.alonStart && alonAge >= 210) { player.alonStart = 0; player.alonRugFx = 0; }
   player.x += player.vx * dt;
   player.y += player.vy * dt;
 
@@ -1458,11 +1458,13 @@ function update(dt) {
         emit(player.x + player.w/2, player.y + player.h/2, '#ff44ff', 40);
       }
       if (pu.type === 'alon') {
-        // rocket pump → instant rug
+        // rocket pump → 2s suspended hold → crash. Schedule the banner to
+        // appear at the rug moment (60 frames from now, when pump ends).
         player.alonStart = gameTime;
         player.rocketUntil = 0;
         player.slowfallUntil = 0;
         player.vy = -50;
+        rugBannerStart = gameTime + 60;
         SFX.rocketBurst();
       }
       if (pu.type === 'trump') {
