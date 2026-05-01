@@ -727,72 +727,96 @@ const SFX = {
   eagleScreech: () => {
     if (!audioCtx) return;
     const t0 = audioCtx.currentTime;
-    // single cry: sharp attack → vibrato'd sustain → descending tail, with raspy
-    // bandpass-filtered noise overlay + amplitude tremolo for the buzzy texture
-    function cry(start, dur, peakF, endF, vol = 0.22) {
-      const osc = audioCtx.createOscillator();
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(peakF * 0.55, start);
-      osc.frequency.linearRampToValueAtTime(peakF, start + 0.045);          // 45ms rise = "kee"
-      osc.frequency.linearRampToValueAtTime(peakF * 0.92, start + dur*0.5);
-      osc.frequency.exponentialRampToValueAtTime(Math.max(endF, 60), start + dur);
+    // Iconic Hollywood "eagle" screech (actually a red-tailed hawk):
+    // one long descending "KREEEEEEAAAR" — sharp attack, high peak ~2400Hz,
+    // raspy noise-dominated tail decaying to ~600Hz over ~1.6s.
+    const dur     = 1.6;
+    const peakF   = 2400;
+    const sustF   = 1500;
+    const endF    = 600;
+    const vol     = 0.26;
 
-      // vibrato — fast pitch wobble for the warble
-      const vib = audioCtx.createOscillator();
-      vib.frequency.value = 13;
-      const vibGain = audioCtx.createGain();
-      vibGain.gain.value = peakF * 0.025;     // ±2.5% pitch wobble
-      vib.connect(vibGain).connect(osc.frequency);
+    // ── tonal body (sawtooth, frequency-modulated for shimmer) ──
+    const osc = audioCtx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(900, t0);
+    osc.frequency.linearRampToValueAtTime(peakF, t0 + 0.035);          // 35ms snap to peak
+    osc.frequency.linearRampToValueAtTime(sustF, t0 + 0.45);           // slow descent through middle
+    osc.frequency.exponentialRampToValueAtTime(endF, t0 + dur);        // long tail down
 
-      // bandpass filter centered on the screech harmonic
-      const bp = audioCtx.createBiquadFilter();
-      bp.type = 'bandpass';
-      bp.frequency.setValueAtTime(peakF * 1.4, start);
-      bp.frequency.exponentialRampToValueAtTime(Math.max(endF * 1.4, 200), start + dur);
-      bp.Q.value = 5;
+    // wide pitch warble at start, narrowing as it descends — gives the "kreeeee" warble
+    const vib = audioCtx.createOscillator();
+    vib.type = 'sine';
+    vib.frequency.setValueAtTime(11, t0);
+    vib.frequency.linearRampToValueAtTime(7, t0 + dur);
+    const vibGain = audioCtx.createGain();
+    vibGain.gain.setValueAtTime(peakF * 0.045, t0);
+    vibGain.gain.exponentialRampToValueAtTime(endF * 0.02, t0 + dur);
+    vib.connect(vibGain).connect(osc.frequency);
 
-      // amplitude envelope with tremolo
-      const env = audioCtx.createGain();
-      env.gain.setValueAtTime(0, start);
-      env.gain.linearRampToValueAtTime(vol, start + 0.04);
-      env.gain.linearRampToValueAtTime(vol * 0.85, start + dur * 0.45);
-      env.gain.exponentialRampToValueAtTime(0.0008, start + dur);
-      const trem = audioCtx.createOscillator();
-      trem.frequency.value = 24;
-      const tremGain = audioCtx.createGain();
-      tremGain.gain.value = vol * 0.35;
-      trem.connect(tremGain).connect(env.gain);
+    // bandpass tracks the fundamental to keep the brassy formant
+    const bp = audioCtx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.setValueAtTime(peakF, t0);
+    bp.frequency.exponentialRampToValueAtTime(endF, t0 + dur);
+    bp.Q.value = 6;
 
-      osc.connect(bp).connect(env).connect(masterGain);
-      osc.start(start);   osc.stop(start + dur + 0.05);
-      vib.start(start);   vib.stop(start + dur + 0.05);
-      trem.start(start);  trem.stop(start + dur + 0.05);
+    // amplitude envelope: hard attack, plateau, long exponential tail
+    const env = audioCtx.createGain();
+    env.gain.setValueAtTime(0, t0);
+    env.gain.linearRampToValueAtTime(vol, t0 + 0.025);
+    env.gain.linearRampToValueAtTime(vol * 0.9, t0 + 0.4);
+    env.gain.exponentialRampToValueAtTime(0.0008, t0 + dur);
 
-      // raspy bandpass noise — gives the "rrrrr" texture
-      const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * dur, audioCtx.sampleRate);
-      const data = buf.getChannelData(0);
-      for (let i = 0; i < data.length; i++) {
-        const ph = i / data.length;
-        data[i] = (Math.random() * 2 - 1) * (0.55 + 0.45 * Math.sin(ph * 70));
-      }
-      const noise = audioCtx.createBufferSource();
-      noise.buffer = buf;
-      const nbp = audioCtx.createBiquadFilter();
-      nbp.type = 'bandpass';
-      nbp.frequency.setValueAtTime(peakF * 1.6, start);
-      nbp.frequency.exponentialRampToValueAtTime(Math.max(endF * 1.6, 200), start + dur);
-      nbp.Q.value = 3;
-      const nGain = audioCtx.createGain();
-      nGain.gain.setValueAtTime(0, start);
-      nGain.gain.linearRampToValueAtTime(0.14, start + 0.04);
-      nGain.gain.exponentialRampToValueAtTime(0.0008, start + dur);
-      noise.connect(nbp).connect(nGain).connect(masterGain);
-      noise.start(start);
+    osc.connect(bp).connect(env).connect(masterGain);
+    osc.start(t0);  osc.stop(t0 + dur + 0.05);
+    vib.start(t0);  vib.stop(t0 + dur + 0.05);
+
+    // ── raspy noise layer (the "rrrrr" of the screech, dominates the tail) ──
+    const sr = audioCtx.sampleRate;
+    const len = Math.floor(sr * dur);
+    const buf = audioCtx.createBuffer(1, len, sr);
+    const data = buf.getChannelData(0);
+    // pink-ish noise modulated at ~50Hz for vocal-fold rasp
+    let prev = 0;
+    for (let i = 0; i < len; i++) {
+      const ph = i / len;
+      const raw = Math.random() * 2 - 1;
+      prev = prev * 0.85 + raw * 0.15;                                  // soft low-pass
+      const rasp = 0.6 + 0.4 * Math.sin(ph * dur * 50 * Math.PI * 2);   // 50Hz rasp
+      data[i] = (raw * 0.7 + prev * 0.3) * rasp;
     }
-    // first cry: long descending "kee-eeerrr"
-    cry(t0,         0.75, 1400, 320, 0.24);
-    // second cry: shorter chirp "kek"
-    cry(t0 + 0.62,  0.42, 1600, 420, 0.20);
+    const noise = audioCtx.createBufferSource();
+    noise.buffer = buf;
+
+    // noise bandpass tracks slightly above tone for that brassy edge
+    const nbp = audioCtx.createBiquadFilter();
+    nbp.type = 'bandpass';
+    nbp.frequency.setValueAtTime(peakF * 1.2, t0);
+    nbp.frequency.exponentialRampToValueAtTime(endF * 1.3, t0 + dur);
+    nbp.Q.value = 2.5;
+
+    // noise envelope: stays loud through the tail (this is what makes it sound like a bird)
+    const nEnv = audioCtx.createGain();
+    nEnv.gain.setValueAtTime(0, t0);
+    nEnv.gain.linearRampToValueAtTime(0.22, t0 + 0.03);
+    nEnv.gain.linearRampToValueAtTime(0.20, t0 + 0.6);
+    nEnv.gain.exponentialRampToValueAtTime(0.0008, t0 + dur);
+
+    noise.connect(nbp).connect(nEnv).connect(masterGain);
+    noise.start(t0);
+
+    // ── sub "throat" undertone for body ──
+    const sub = audioCtx.createOscillator();
+    sub.type = 'triangle';
+    sub.frequency.setValueAtTime(peakF / 3, t0);
+    sub.frequency.exponentialRampToValueAtTime(endF / 3, t0 + dur);
+    const subEnv = audioCtx.createGain();
+    subEnv.gain.setValueAtTime(0, t0);
+    subEnv.gain.linearRampToValueAtTime(0.08, t0 + 0.05);
+    subEnv.gain.exponentialRampToValueAtTime(0.0008, t0 + dur);
+    sub.connect(subEnv).connect(masterGain);
+    sub.start(t0);  sub.stop(t0 + dur + 0.05);
   },
   gameOver:      () => {
     // dramatic bass drop
@@ -1019,10 +1043,11 @@ const GRAVITY = 0.4;
 const JUMP_V = -13;
 const JUMP_GOLD = -19;
 const MAX_VX = 7;
+const COIN_VALUE = 5000;          // base mcap per coin (× combo mult)
 const ACCEL = 0.6;
 const FRICTION = 0.85;
 
-let player, platforms, coins, particles, hazards, sharks, powerups, stars, candles;
+let player, platforms, coins, particles, hazards, sharks, powerups, stars, candles, floaters;
 let camera, alive, started, highestY, gameTime;
 let paused = false;
 let nextHazardAt, nextSharkAt, nextPowerupAt;
@@ -1056,6 +1081,7 @@ function reset() {
   sharks = [];
   powerups = [];
   candles = [];           // background candle layer
+  floaters = [];          // floating "+$X,XXX" pickup text
   camera = 0;
   alive = true;
   highestY = player.y;
@@ -1368,7 +1394,7 @@ function spawnPowerup(y) {
 
 function currentMcap() {
   const heightM = Math.max(0, Math.floor(-highestY / 10));
-  return heightM * 1000 + coinsCollected * 1000 * comboMult;
+  return heightM * 1000 + coinsCollected * COIN_VALUE * comboMult;
 }
 
 function emit(x, y, color, n=10) {
@@ -1511,12 +1537,19 @@ function update(dt) {
   if (player.vy > 0) {
     // BIG TITTY BOUNCE: 1.8x jump impulse for 10s after IDF pickup
     const bounceMult = (gameTime < player.idfUntil) ? 1.8 : 1.0;
+    const isBig = gameTime < player.bigUntil;
     for (const p of platforms) {
       if (p.type === 'breakaway' && p.used) continue;
       const px = player.x + player.w/2;
       const pyBottom = player.y + player.h;
-      if (px > p.x && px < p.x + p.w
-          && pyBottom > p.y && pyBottom < p.y + p.h + 8
+      // big chungus: full-width x-overlap AND deeper y-tolerance — landings stick.
+      // normal: precise center-point + tight y window.
+      const xHit = isBig
+        ? (player.x + player.w > p.x && player.x < p.x + p.w)
+        : (px > p.x && px < p.x + p.w);
+      const yTol = isBig ? 28 : 8;
+      if (xHit
+          && pyBottom > p.y && pyBottom < p.y + p.h + yTol
           && player.y < p.y) {
         if (p.type === 'red') {
           alive = false;
@@ -1671,8 +1704,23 @@ function update(dt) {
       comboMult = Math.min(5, 1 + Math.floor(comboCount / 3));
       comboFlash = 30;
       SFX.coinChime(comboCount);
+      // floating "+$X" credit so player feels each pickup. MAGA doubles.
+      const inMaga = gameTime < player.magaUntil;
+      const credit = COIN_VALUE * comboMult * (inMaga ? 2 : 1);
+      floaters.push({
+        x: c.x + c.w/2,
+        y: c.y + c.h/2,
+        vy: -1.2,
+        life: 70,
+        maxLife: 70,
+        text: '+$' + credit.toLocaleString() + (comboMult > 1 ? ' x' + comboMult : '') + (inMaga ? ' MAGA' : ''),
+        color: inMaga ? '#ff44aa' : '#fff200',
+      });
     }
   }
+  // age floaters
+  for (const f of floaters) { f.y += f.vy * dt; f.life -= dt; }
+  floaters = floaters.filter(f => f.life > 0);
   if (gameTime > comboExpires) { comboCount = 0; comboMult = 1; }
   if (comboFlash > 0) comboFlash -= dt;
 
@@ -1781,7 +1829,7 @@ function update(dt) {
   // mcap = base height × $1000, with combo multiplier on collected coins (count),
   // plus casino bonus (running total of blackjack wins/losses, can be negative)
   const collected = coinsCollected;
-  const mcap = Math.max(0, heightM * 1000 + collected * 1000 * comboMult + (player.casinoBonus | 0));
+  const mcap = Math.max(0, heightM * 1000 + collected * COIN_VALUE * comboMult + (player.magaBonus | 0) + (player.casinoBonus | 0));
   document.getElementById('mcap').textContent = '$' + mcap.toLocaleString();
   document.getElementById('height').textContent = heightM.toLocaleString();
 }
@@ -2137,6 +2185,31 @@ function draw() {
     ctx.textBaseline = 'middle';
     ctx.fillText('$', c.x + c.w/2, sy + c.h/2 + 1);
   }
+
+  // pickup floaters: bold "+$X,XXX" text drifting up and fading out
+  for (const f of floaters) {
+    const sy = f.y - camera;
+    if (sy < -40 || sy > VH() + 40) continue;
+    const a = Math.max(0, f.life / f.maxLife);
+    const scale = 1 + (1 - a) * 0.4;
+    ctx.save();
+    ctx.globalAlpha = a;
+    ctx.translate(f.x, sy);
+    ctx.scale(scale, scale);
+    ctx.shadowColor = f.color;
+    ctx.shadowBlur = 14;
+    ctx.fillStyle = f.color;
+    ctx.strokeStyle = '#0a0410';
+    ctx.lineWidth = 4;
+    ctx.font = '700 22px "Bebas Neue", "Anton", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.strokeText(f.text, 0, 0);
+    ctx.fillText(f.text, 0, 0);
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+  ctx.shadowBlur = 0;
 
   // particles
   for (const pp of particles) {
@@ -2882,7 +2955,7 @@ async function gameOver() {
     const delta = currentMcap() - player.magaLastMcap;
     if (delta > 0) player.magaBonus += delta;
   }
-  const mcap = Math.max(0, heightM * 1000 + collected * 1000 * comboMult + (player.magaBonus | 0) + (player.casinoBonus | 0));
+  const mcap = Math.max(0, heightM * 1000 + collected * COIN_VALUE * comboMult + (player.magaBonus | 0) + (player.casinoBonus | 0));
   const zoneName = ZONES[currentZone()].name;
   document.getElementById('result-name').textContent = playerName || 'ANON';
   document.getElementById('result-mcap').textContent = '$' + mcap.toLocaleString();

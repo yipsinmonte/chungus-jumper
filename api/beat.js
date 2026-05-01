@@ -43,13 +43,26 @@ export default async function handler(req, res) {
     }
 
     // monotonicity: mcap/height never go backwards in a real run
-    // (per-beat rate caps are NOT enforced here — alon pump / rocket / pumpcandle
-    // can legitimately spike +200k mcap in a single 2s beat. The session-level
-    // avg-rate cap + final-vs-last-beat divergence cap at /api/score catch cheats.)
     if (cleanMcap   < session.lastBeatMcap)   return res.status(400).json({ error: 'mcap regressed' });
     if (cleanHeight < session.lastBeatHeight) return res.status(400).json({ error: 'height regressed' });
 
     const sinceLastMs = Math.min(now - session.lastBeatTime, BEAT_GAP_CAP_MS);
+    const sinceLastSec = sinceLastMs / 1000;
+
+    // per-beat delta cap: stops "fire 2 beats and submit 10M" attacks at the
+    // beat layer too. Allows legit alon/pumpcandle bursts (~250k in 2s) plus
+    // headroom; caps rate-of-growth a fake bot can claim per beat.
+    const beatMcapCap   = Math.max(400_000, sinceLastSec * MAX_MCAP_PER_SEC   * 6);
+    const beatHeightCap = Math.max(400,     sinceLastSec * MAX_HEIGHT_PER_SEC * 5);
+    if (cleanMcap   > session.lastBeatMcap   + beatMcapCap)   return res.status(400).json({ error: 'beat mcap delta too large' });
+    if (cleanHeight > session.lastBeatHeight + beatHeightCap) return res.status(400).json({ error: 'beat height delta too large' });
+
+    // beat-rate cap: real client fires every ~2s; reject sub-500ms spam that
+    // would let a bot inflate `beats` to satisfy the cadence check at /api/score.
+    // Skip on the very first beat (session init sets lastBeatTime = now).
+    if (session.beats > 0 && now - session.lastBeatTime < 500) {
+      return res.status(429).json({ error: 'beat too fast' });
+    }
 
     session.effectiveMs    += sinceLastMs;
     session.lastBeatTime    = now;
