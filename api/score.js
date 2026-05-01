@@ -69,15 +69,16 @@ export default async function handler(req, res) {
       if (cleanHeight > session.lastBeatHeight + allowedHeightGrowth) return res.status(400).json({ error: 'height diverges from heartbeat' });
 
       // 2) overall avg-rate cap on effective play time (alt-tab doesn't extend this).
-      //    Legit base rate ~25-30k mcap/sec, but alon pump (+192k in 1s), MAGA+rocket
-      //    combos, and stacked bursts can push short games well above that average.
-      //    Cap mcap at effectiveSec * 35k * 3 = 105k/s avg, with a flat 800k burst
-      //    allowance so very short games that include one big legit burst still post.
+      //    Legit base rate ~25-30k mcap/sec, but stacked bursts (multiple alon pumps
+      //    + MAGA doubling + rocket carrots) can sustain ~200k/s for short windows.
+      //    Cap at effectiveSec * 35k * 6 = 210k/s avg, plus a flat 2M burst allowance
+      //    so short burst-heavy games post correctly. Cheaters with near-zero
+      //    effective time still capped at ~2.8M (4s gap × 210k + 2M).
       const totalEffectiveSec = (session.effectiveMs + sinceLastMs) / 1000;
-      if (cleanMcap > totalEffectiveSec * MAX_MCAP_PER_SEC * 3 + 800_000) {
+      if (cleanMcap > totalEffectiveSec * MAX_MCAP_PER_SEC * 6 + 2_000_000) {
         return res.status(400).json({ error: 'mcap exceeds effective rate' });
       }
-      if (cleanHeight > totalEffectiveSec * MAX_HEIGHT_PER_SEC * 3 + 800) {
+      if (cleanHeight > totalEffectiveSec * MAX_HEIGHT_PER_SEC * 6 + 2_000) {
         return res.status(400).json({ error: 'height exceeds effective rate' });
       }
     }
