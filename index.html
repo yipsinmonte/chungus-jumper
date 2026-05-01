@@ -713,6 +713,24 @@ chungusImg.onload = () => { chungusReady = true; };
 chungusImg.onerror = () => { chungusReady = false; };
 chungusImg.src = 'chungus.png';
 
+const pillImg = new Image();
+let pillReady = false;
+pillImg.onload = () => { pillReady = true; };
+pillImg.onerror = () => { pillReady = false; };
+pillImg.src = 'pill.png';
+
+const alonImg = new Image();
+let alonReady = false;
+alonImg.onload = () => { alonReady = true; };
+alonImg.onerror = () => { alonReady = false; };
+alonImg.src = 'alon.png';
+
+const netanyahuImg = new Image();
+let netanyahuReady = false;
+netanyahuImg.onload = () => { netanyahuReady = true; };
+netanyahuImg.onerror = () => { netanyahuReady = false; };
+netanyahuImg.src = 'netanyahu.png';
+
 let W, H;
 function resize() {
   const dpr = window.devicePixelRatio || 1;
@@ -764,7 +782,8 @@ let comboFlash = 0;
 
 function reset() {
   player = { x: VW()/2, y: VH() - 120, vx: 0, vy: -8, w: 64, h: 64,
-             shieldUntil: 0, rocketUntil: 0, slowfallUntil: 0 };
+             shieldUntil: 0, rocketUntil: 0, slowfallUntil: 0,
+             bigUntil: 0, alonStart: 0 };
   platforms = [];
   coins = [];
   particles = [];
@@ -1014,12 +1033,15 @@ function spawnTier(y, force) {
 }
 
 function spawnFallingChungus() {
-  const size = 70 + Math.random() * 30;
+  const isNetanyahu = Math.random() < 0.18;     // ~1 in 5 is Bibi
+  const baseSize = 70 + Math.random() * 30;
+  const size = isNetanyahu ? baseSize * 1.55 : baseSize;
   const x = Math.random() * (VW() - size);
   const y = camera - size - 30;
-  const vy = 2.0 + Math.random() * 2.5;
+  const vy = (isNetanyahu ? 1.4 : 2.0) + Math.random() * 2.5;
   const vx = (Math.random() - 0.5) * 1.5;
-  hazards.push({ x, y, vx, vy, w: size, h: size, born: gameTime });
+  hazards.push({ x, y, vx, vy, w: size, h: size, born: gameTime,
+                 kind: isNetanyahu ? 'netanyahu' : 'chungus' });
 }
 
 // Jeet shark — slides across screen at random height, telegraph then attack
@@ -1036,12 +1058,15 @@ function spawnJeetShark() {
   });
 }
 
-// Power-up: rocket (carrot), shield (diamond), slowfall (bonk hat), pumpcandle
+// Power-up: rocket (carrot), shield (diamond), slowfall (bonk hat), pumpcandle, pill (3x), alon (rug)
 function spawnPowerup(y) {
-  const types = ['rocket', 'shield', 'slowfall', 'pumpcandle'];
+  // weighted: pill + alon are rarer than the OG four
+  const types = ['rocket','rocket', 'shield','shield', 'slowfall','slowfall',
+                 'pumpcandle','pumpcandle', 'pill', 'alon'];
   const type = types[Math.floor(Math.random() * types.length)];
   const x = 30 + Math.random() * (VW() - 80);
-  powerups.push({ x, y: y - 40, w: 38, h: 38, type, collected: false, born: gameTime });
+  const size = (type === 'pill' || type === 'alon') ? 48 : 38;
+  powerups.push({ x, y: y - 40, w: size, h: size, type, collected: false, born: gameTime });
 }
 
 function emit(x, y, color, n=10) {
@@ -1100,15 +1125,42 @@ function update(dt) {
   if (!input.left && !input.right) player.vx *= Math.pow(FRICTION, dt);
   player.vx = Math.max(-MAX_VX, Math.min(MAX_VX, player.vx));
 
+  // expire pill (3x size) — shrink back to base
+  if (player.bigUntil && gameTime > player.bigUntil) {
+    const oldW = player.w, oldH = player.h;
+    player.w = 64; player.h = 64;
+    player.x += (oldW - player.w) / 2;
+    player.y += (oldH - player.h) / 2;
+    player.bigUntil = 0;
+    emit(player.x + player.w/2, player.y + player.h/2, '#ff44ff', 20);
+  }
+
+  // alon pump-and-rug
+  const alonAge = player.alonStart ? gameTime - player.alonStart : -1;
+  const inAlonPump = alonAge >= 0 && alonAge < 60;
+  const inAlonRug  = alonAge >= 60 && alonAge < 90;
+
   // physics with power-up modifiers
   const inRocket = gameTime < player.rocketUntil;
   const inSlowfall = gameTime < player.slowfallUntil;
-  if (inRocket) {
+  if (inAlonPump) {
+    player.vy = Math.min(player.vy - 2 * dt, -32);   // hard upward
+    if (Math.random() < dt * 2) emit(player.x + player.w/2, player.y + player.h, '#22ddff', 2);
+  } else if (inAlonRug) {
+    if (alonAge < 61) {
+      // rug moment — flash + huge particle burst
+      emit(player.x + player.w/2, player.y + player.h/2, '#ff2266', 60);
+      emit(player.x + player.w/2, player.y + player.h/2, '#22ddff', 40);
+      shake(20);
+    }
+    player.vy = 60;          // instant crash
+  } else if (inRocket) {
     player.vy = -16;          // sustained upward thrust (instant velocity, no dt)
     if (Math.random() < dt) emit(player.x + player.w/2, player.y + player.h, '#fffb00', 1);
   } else {
     player.vy += (inSlowfall ? GRAVITY * 0.45 : GRAVITY) * dt;
   }
+  if (player.alonStart && alonAge >= 90) player.alonStart = 0;
   player.x += player.vx * dt;
   player.y += player.vy * dt;
 
@@ -1301,6 +1353,23 @@ function update(dt) {
       if (pu.type === 'shield')      player.shieldUntil = gameTime + 360;
       if (pu.type === 'slowfall')    player.slowfallUntil = gameTime + 360;
       if (pu.type === 'pumpcandle')  { player.vy = JUMP_GOLD * 1.6; SFX.springBounce(); }
+      if (pu.type === 'pill') {
+        // chungus pill — 3x size for 6s; recenter so they don't pop into a platform
+        const newW = 64 * 3, newH = 64 * 3;
+        player.x -= (newW - player.w) / 2;
+        player.y -= (newH - player.h) / 2;
+        player.w = newW; player.h = newH;
+        player.bigUntil = gameTime + 360;
+        emit(player.x + player.w/2, player.y + player.h/2, '#ff44ff', 40);
+      }
+      if (pu.type === 'alon') {
+        // rocket pump → instant rug
+        player.alonStart = gameTime;
+        player.rocketUntil = 0;
+        player.slowfallUntil = 0;
+        player.vy = -50;
+        SFX.rocketBurst();
+      }
     }
   }
   powerups = powerups.filter(p => !p.collected && p.y < camera + VH() + 200);
@@ -1621,26 +1690,37 @@ function draw() {
     ctx.globalAlpha = 1;
   }
 
-  // ── hazards (falling fat chunguses) ───────────────────────
+  // ── hazards (falling fat chunguses + netanyahu) ───────────
   for (const h of hazards) {
     const sy = h.y - camera;
     if (sy > VH() + 50 || sy < -h.h - 50) continue;
+    const isNet = h.kind === 'netanyahu';
     ctx.save();
-    ctx.shadowColor = 'rgba(255,143,208,0.55)';
-    ctx.shadowBlur = 28;
+    ctx.shadowColor = isNet ? 'rgba(255,80,80,0.6)' : 'rgba(255,143,208,0.55)';
+    ctx.shadowBlur = isNet ? 36 : 28;
     ctx.translate(h.x + h.w/2, sy + h.h/2);
     // wobble rotation while falling
-    const rot = Math.sin((gameTime + h.born * 0.1) * 0.08) * 0.18;
+    const rot = Math.sin((gameTime + h.born * 0.1) * 0.08) * (isNet ? 0.12 : 0.18);
     ctx.rotate(rot);
-    // FAT chungus — wider + slightly squashed vertically
-    ctx.scale(1.45, 0.88);
-    if (chungusReady) {
-      ctx.drawImage(chungusImg, -h.w/2, -h.h/2, h.w, h.h);
+    if (isNet) {
+      // netanyahu — keep aspect, draw bigger
+      if (netanyahuReady) {
+        ctx.drawImage(netanyahuImg, -h.w/2, -h.h/2, h.w, h.h);
+      } else {
+        ctx.font = `${h.h * 0.95}px serif`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('👤', 0, 4);
+      }
     } else {
-      ctx.font = `${h.h * 0.95}px serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('🐰', 0, 4);
+      // FAT chungus — wider + slightly squashed vertically
+      ctx.scale(1.45, 0.88);
+      if (chungusReady) {
+        ctx.drawImage(chungusImg, -h.w/2, -h.h/2, h.w, h.h);
+      } else {
+        ctx.font = `${h.h * 0.95}px serif`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('🐰', 0, 4);
+      }
     }
     ctx.restore();
   }
@@ -1732,23 +1812,29 @@ function draw() {
     const py = pu.y - camera;
     if (py > VH() + 30 || py < -40) continue;
     const bob = Math.sin((gameTime + pu.born) * 0.08) * 4;
-    let icon = '?', color = '#fffb00';
+    let icon = '?', color = '#fffb00', img = null, ready = false;
     if (pu.type === 'rocket')      { icon = '🥕'; color = '#ff8844'; }
     if (pu.type === 'shield')      { icon = '💎'; color = '#44ddff'; }
     if (pu.type === 'slowfall')    { icon = '🪂'; color = '#88ff44'; }
     if (pu.type === 'pumpcandle')  { icon = '🚀'; color = '#fffb00'; }
+    if (pu.type === 'pill')        { icon = '💊'; color = '#ff44ff'; img = pillImg; ready = pillReady; }
+    if (pu.type === 'alon')        { icon = '🚀'; color = '#22ddff'; img = alonImg; ready = alonReady; }
 
     ctx.save();
     ctx.shadowColor = color;
     ctx.shadowBlur = 24;
     ctx.fillStyle = color + '33';
     ctx.beginPath();
-    ctx.arc(pu.x + pu.w/2, py + pu.h/2 + bob, pu.w/2 + 2, 0, Math.PI*2);
+    ctx.arc(pu.x + pu.w/2, py + pu.h/2 + bob, pu.w/2 + 4, 0, Math.PI*2);
     ctx.fill();
     ctx.shadowBlur = 0;
-    ctx.font = `${pu.h * 0.85}px serif`;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(icon, pu.x + pu.w/2, py + pu.h/2 + bob + 2);
+    if (img && ready) {
+      ctx.drawImage(img, pu.x, py + bob, pu.w, pu.h);
+    } else {
+      ctx.font = `${pu.h * 0.85}px serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(icon, pu.x + pu.w/2, py + pu.h/2 + bob + 2);
+    }
     ctx.restore();
   }
 
