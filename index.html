@@ -322,49 +322,100 @@
 
   /* Game over */
   .gameover h1 { font-size: clamp(40px, 9vw, 88px); line-height: 0.9; }
-  .wincard {
-    width: auto;
-    max-width: 92vw;
-    max-height: 60vh;
-    height: auto;
-    display: block;
-    margin: 0 auto;
+
+  .result-card {
+    background: var(--panel-mid);
     border: 4px solid var(--magenta);
-    box-shadow: 0 0 40px #ff00ff99, inset 0 0 12px #ff00ff44;
-    image-rendering: -webkit-optimize-contrast;
+    box-shadow: 0 0 30px #ff00ff99, inset 0 0 14px #ff00ff44;
+    padding: 18px 28px;
+    margin: 14px 0 8px;
+    text-align: center;
+    width: min(440px, 90vw);
   }
-  .go-actions {
-    display: flex; flex-wrap: wrap; justify-content: center; gap: 4px;
-    margin-top: 18px;
-  }
-  .go-hint {
-    margin-top: 12px;
-    font-family: "Courier New", monospace;
-    font-size: 12px; letter-spacing: 2px;
-    color: var(--cyan);
-    text-shadow: 0 0 6px #00ffff;
-    text-transform: uppercase;
-    animation: blink 1.5s step-start infinite;
-  }
-  .final {
-    margin: 8px 0 18px;
-    font-family: "Comic Neue", cursive;
-    font-weight: 700;
-    font-size: 72px;
-    letter-spacing: 3px;
-    color: var(--yellow);
-    text-shadow: 0 0 16px #ffff00aa, 2px 2px 0 #000;
-    line-height: 1;
-  }
-  .final-label {
+  .result-eyebrow {
     font-family: "Comic Neue", cursive;
     font-weight: 700;
     font-size: 13px;
     letter-spacing: 4px;
     color: var(--cyan);
     text-transform: uppercase;
+    text-shadow: 0 0 8px #00ffff;
+    margin-bottom: 8px;
+    animation: blink 1.2s step-start infinite;
+  }
+  .result-name {
+    font-family: "Comic Neue", cursive;
+    font-weight: 700;
+    font-size: 22px;
+    letter-spacing: 3px;
+    color: #fff;
+    text-transform: uppercase;
+    text-shadow: 0 0 8px #ff00ff, 1px 1px 0 #000;
+    margin-bottom: 6px;
+  }
+  .result-height-label,
+  .result-mcap-label {
+    font-family: "Courier New", monospace;
+    font-size: 11px;
+    letter-spacing: 4px;
+    color: var(--cyan);
+    text-transform: uppercase;
+    text-shadow: 0 0 4px #00ffff;
+    margin-top: 6px;
+  }
+  .result-height {
+    font-family: "Comic Neue", "Comic Sans MS", cursive;
+    font-weight: 700;
+    font-size: clamp(56px, 14vw, 104px);
+    line-height: 1;
+    letter-spacing: 3px;
+    color: var(--yellow);
+    -webkit-text-stroke: 2px #000;
+    text-shadow: 0 0 18px #ffff00cc, 0 0 36px #ff00ff66, 2px 2px 0 #000;
+    margin: 2px 0 4px;
+  }
+  .result-mcap {
+    font-family: "Courier New", monospace;
+    font-weight: bold;
+    font-size: 28px;
+    letter-spacing: 1px;
+    color: var(--yellow);
+    text-shadow: 0 0 10px #ffff0099;
+    margin: 0 0 4px;
+  }
+  .result-zone {
+    font-family: "Comic Neue", cursive;
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 3px;
+    color: var(--magenta);
+    text-shadow: 0 0 8px #ff00ff;
+    text-transform: uppercase;
+    margin-top: 8px;
+    border-top: 1px dashed var(--magenta);
+    padding-top: 8px;
+  }
+
+  .lb-wrap.lb-big {
+    max-height: min(60vh, 540px);
+    width: min(520px, 92vw);
+    margin-top: 6px;
+  }
+  .lb-wrap.lb-big .lb-list li { padding: 7px 0; font-size: 17px; }
+  .lb-wrap.lb-big .lb-list .lbscore { font-size: 18px; }
+
+  .go-actions {
+    display: flex; flex-wrap: wrap; justify-content: center; gap: 4px;
+    margin-top: 14px;
+  }
+  .go-hint {
+    margin-top: 10px;
+    font-family: "Courier New", monospace;
+    font-size: 11px; letter-spacing: 2px;
+    color: var(--cyan);
     text-shadow: 0 0 6px #00ffff;
-    margin-bottom: 4px;
+    text-transform: uppercase;
+    animation: blink 1.5s step-start infinite;
   }
 
   /* Mobile */
@@ -372,7 +423,8 @@
     h1 { font-size: 18vw; }
     .tag { font-size: 16px; }
     .gameover h1 { font-size: 12vw; }
-    .final { font-size: 52px; }
+    .result-height { font-size: clamp(48px, 16vw, 80px); }
+    .result-mcap { font-size: 22px; }
     .btn { font-size: 22px; padding: 12px 28px; letter-spacing: 3px; }
     .btn.ghost { font-size: 18px; padding: 10px 22px; }
     .mcap-num { font-size: 22px; }
@@ -411,17 +463,23 @@
 </div>
 
 <div class="screen gameover hidden" id="gameover">
-  <canvas id="wincard-canvas" class="wincard"></canvas>
-  <div class="lb-wrap" style="margin-top: 18px;">
+  <div class="result-card">
+    <div class="result-eyebrow">— jump complete —</div>
+    <div class="result-name" id="result-name">ANON</div>
+    <div class="result-height-label">HEIGHT REACHED</div>
+    <div class="result-height" id="result-height">0M</div>
+    <div class="result-mcap-label">MCAP</div>
+    <div class="result-mcap" id="result-mcap">$0</div>
+    <div class="result-zone" id="result-zone">CARROT PILLARS</div>
+  </div>
+  <div class="lb-wrap lb-big">
     <div class="lb-title">— top runs —</div>
     <ol class="lb-list" id="go-lb"></ol>
   </div>
   <div class="go-actions">
     <button class="btn" id="retry-btn">JUMP AGAIN</button>
-    <button class="btn ghost" id="download-btn">SAVE CARD</button>
-    <button class="btn ghost" id="tweet-btn">TWEET ATH</button>
   </div>
-  <div class="go-hint">card saved → paste it into your tweet</div>
+  <div class="go-hint">screenshot to share your run</div>
 </div>
 
 <script>
@@ -664,12 +722,6 @@ chungusImg.onload = () => { chungusReady = true; };
 chungusImg.onerror = () => { chungusReady = false; };
 chungusImg.src = 'chungus.png';
 
-// wincard background
-const wincardImg = new Image();
-let wincardReady = false;
-wincardImg.onload = () => { wincardReady = true; };
-wincardImg.onerror = () => { wincardReady = false; };
-wincardImg.src = 'wincard.jpg';
 let W, H;
 function resize() {
   const dpr = window.devicePixelRatio || 1;
@@ -1938,9 +1990,12 @@ async function gameOver() {
   const collected = coinsCollected;
   const mcap = heightM * 1000 + collected * 1000 * comboMult;
   const zoneName = ZONES[currentZone()].name;
-  renderWinCard();
+  document.getElementById('result-name').textContent   = playerName || 'ANON';
+  document.getElementById('result-height').textContent = heightM.toLocaleString() + 'M';
+  document.getElementById('result-mcap').textContent   = '$' + mcap.toLocaleString();
+  document.getElementById('result-zone').textContent   = zoneName;
   goEl.classList.remove('hidden');
-  // submit + render leaderboard (async, doesn't block card display)
+  // submit + render leaderboard (async, doesn't block result display)
   lastScoreTimestamp = await pushScore(playerName, mcap, heightM, zoneName);
   renderGameOverLeaderboard();
 }
@@ -1988,125 +2043,6 @@ function renderGameOverLeaderboard() {
   if (meEl) meEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
 }
 
-function renderWinCard() {
-  const heightM = Math.max(0, Math.floor(-highestY / 10));
-  const collected = coinsCollected;
-  const mcap = heightM * 1000 + collected * 1000 * comboMult;
-  const zoneName = ZONES[currentZone()].name;
-
-  const c = document.getElementById('wincard-canvas');
-  const W = 1920, H = 1080;
-  c.width = W; c.height = H;
-  const x = c.getContext('2d');
-
-  // ── bg image (cover-fit) ────────────────────────────────
-  if (wincardReady) {
-    const ia = wincardImg.naturalHeight / wincardImg.naturalWidth;
-    const ca = H / W;
-    let dw, dh, dx, dy;
-    if (ia > ca) {           // image taller than card aspect
-      dw = W; dh = W * ia;
-      dx = 0; dy = (H - dh) / 2;
-    } else {                  // image wider
-      dh = H; dw = H / ia;
-      dy = 0; dx = (W - dw) / 2;
-    }
-    x.drawImage(wincardImg, dx, dy, dw, dh);
-  } else {
-    const g = x.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, '#1a0828');
-    g.addColorStop(1, '#3a0866');
-    x.fillStyle = g;
-    x.fillRect(0, 0, W, H);
-  }
-
-  // ── light gradient overlays (only at edges, keep image visible) ──
-  const topG = x.createLinearGradient(0, 0, 0, 280);
-  topG.addColorStop(0, 'rgba(0,0,0,0.72)');
-  topG.addColorStop(1, 'rgba(0,0,0,0)');
-  x.fillStyle = topG;
-  x.fillRect(0, 0, W, 280);
-
-  const botG = x.createLinearGradient(0, H - 240, 0, H);
-  botG.addColorStop(0, 'rgba(0,0,0,0)');
-  botG.addColorStop(1, 'rgba(0,0,0,0.85)');
-  x.fillStyle = botG;
-  x.fillRect(0, H - 240, W, 240);
-
-  // ── TITLE ─────────────────────────────────────────────────
-  x.textAlign = 'center';
-  x.textBaseline = 'middle';
-  x.font = '700 130px "Bebas Neue", sans-serif';
-  const tg = x.createLinearGradient(0, 60, 0, 200);
-  tg.addColorStop(0, '#ffffff');
-  tg.addColorStop(0.45, '#ffd0ee');
-  tg.addColorStop(1, '#ff44aa');
-  x.shadowColor = '#ff44aa';
-  x.shadowBlur = 26;
-  x.fillStyle = tg;
-  x.fillText('FUCK MY CHUNGUS LIFE', W/2, 110);
-  x.shadowBlur = 0;
-
-  // ── BOTTOM STRIP: name + mcap + stats ─────────────────────
-  // name (tiny eyebrow above mcap)
-  x.font = '500 28px "Major Mono Display", monospace';
-  x.fillStyle = '#ff8fd0';
-  x.fillText(playerName, W/2, H - 200);
-
-  // mcap
-  x.font = '700 150px "Bebas Neue", sans-serif';
-  x.fillStyle = '#fffb00';
-  x.shadowColor = '#ff00aa';
-  x.shadowBlur = 36;
-  x.fillText('$' + mcap.toLocaleString(), W/2, H - 110);
-  x.shadowBlur = 0;
-
-  // stats row at very bottom
-  x.font = '500 22px "Major Mono Display", monospace';
-  const stats = [
-    [`HEIGHT`, heightM.toLocaleString() + 'M'],
-    [`ZONE`, zoneName],
-    [`COINS`, collected.toString()],
-    [`MULT`, comboMult + 'x'],
-  ];
-  const stripW = W - 200;
-  const each = stripW / stats.length;
-  const labelY = H - 50;
-  const valY = H - 24;
-  stats.forEach(([label, val], i) => {
-    const cx = 100 + each * i + each / 2;
-    x.fillStyle = 'rgba(255, 170, 221, 0.6)';
-    x.font = '500 14px "Major Mono Display", monospace';
-    x.fillText(label, cx, labelY);
-    x.fillStyle = '#ffffff';
-    x.font = '700 26px "Bebas Neue", sans-serif';
-    x.fillText(val, cx, valY);
-  });
-
-  return { mcap, heightM, zoneName, collected };
-}
-
-function downloadCard() {
-  const canvas = document.getElementById('wincard-canvas');
-  const link = document.createElement('a');
-  const heightM = Math.max(0, Math.floor(-highestY / 10));
-  link.download = `chungus-jumper-${heightM}m.png`;
-  link.href = canvas.toDataURL('image/png');
-  link.click();
-}
-
-function tweetIt() {
-  const heightM = Math.max(0, Math.floor(-highestY / 10));
-  const collected = coinsCollected;
-  const mcap = heightM * 1000 + collected * 1000 * comboMult;
-  // auto-download the card so user can paste it
-  downloadCard();
-  const text = `FUCK MY CHUNGUS LIFE\n\ni climbed $CHUNGUS to $${mcap.toLocaleString()} mcap (${heightM}m) before the chart crashed 🐰\n\nbeat me → chungus-jumper.vercel.app`;
-  setTimeout(() => {
-    window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, '_blank');
-  }, 300);
-}
-
 document.getElementById('play-btn').addEventListener('click', start);
 document.getElementById('retry-btn').addEventListener('click', () => {
   // bring back title screen so they see the leaderboard before playing again
@@ -2116,9 +2052,6 @@ document.getElementById('retry-btn').addEventListener('click', () => {
   // jump in immediately too
   start();
 });
-document.getElementById('download-btn').addEventListener('click', downloadCard);
-document.getElementById('tweet-btn').addEventListener('click', tweetIt);
-
 // prefill name + render leaderboard on initial load
 const nameInput = document.getElementById('name-input');
 nameInput.value = playerName;
