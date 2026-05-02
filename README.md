@@ -28,9 +28,39 @@ Static site — works on Vercel, Netlify, GitHub Pages, anywhere. Vercel auto-de
 
 ## 1v1 race
 
-Title screen → **1V1 RACE** → pick target mcap → share the room link. Both clients seed from the same RNG so platforms/coins are identical; first to reach the target mcap wins. Ghost of the opponent rendered translucent on your screen.
+Title screen → **1V1 RACE** → pick target mcap → share the room link. Both clients seed from the same RNG; the canvas is locked to a 480×800 virtual world during a race so spawn fns produce byte-identical platforms across screens. Ghost is rendered translucent in the same chungus sprite size as the local player, with linear extrapolation between 50Hz ticks for smooth motion.
 
 To enable, deploy the `partykit/` backend (see `partykit/README.md`) and either edit `PARTYKIT_HOST` in `index.html` or drop a `<meta name="partykit-host" content="…">` in the `<head>`.
+
+### Embedding on your own site
+
+```html
+<iframe id="chungus-game"
+        src="https://chungus-jumper.vercel.app/"
+        width="100%" height="700"
+        allow="autoplay; fullscreen; clipboard-write"
+        style="border:0;"></iframe>
+<script>
+  // Forward ?room=ABC from the parent URL into the iframe so share links
+  // like https://chungus.site/game/?room=ABC auto-join the lobby.
+  const room = new URLSearchParams(location.search).get('room');
+  if (room) {
+    const iframe = document.getElementById('chungus-game');
+    function send() { iframe.contentWindow.postMessage({ type: 'chungus-room', code: room }, '*'); }
+    iframe.addEventListener('load', send);
+    window.addEventListener('message', (ev) => {
+      if (ev.data && ev.data.type === 'chungus-ready') send();
+    });
+  }
+</script>
+```
+
+The iframe also exposes a `share-base` override so links it generates point at your own URL:
+
+```html
+<meta name="share-base" content="https://chungus.site/game/">
+```
+…but the default is already `https://chungus.site/game/`, so no action needed if that's the canonical embed location.
 
 ## Global leaderboard (Vercel KV setup)
 

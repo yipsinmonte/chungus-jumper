@@ -1205,16 +1205,39 @@ casinoImg.onerror = () => { casinoReady = false; };
 casinoImg.src = 'casino.png';
 
 let W, H;
+// In race mode we lock the virtual play-area to a fixed size so both
+// players' VW()/VH() return identical values — otherwise spawn fns that
+// use VW() (clamps, mirroring) produce divergent platform positions
+// despite the shared RNG seed, and ghosts appear to jump on nothing.
+let raceLockW = null, raceLockH = null;
+const RACE_W = 480, RACE_H = 800;   // mobile portrait reference
 function resize() {
   const dpr = window.devicePixelRatio || 1;
-  // documentElement.clientWidth/Height tracks the real visible viewport,
-  // including post-fullscreen iframe sizes where window.innerHeight can lag.
-  const w = document.documentElement.clientWidth  || window.innerWidth;
-  const h = document.documentElement.clientHeight || window.innerHeight;
+  const realW = document.documentElement.clientWidth  || window.innerWidth;
+  const realH = document.documentElement.clientHeight || window.innerHeight;
+  // race mode: world is logically RACE_W × RACE_H; the canvas is sized
+  // to that and CSS-scaled to fit the viewport (object-fit: contain).
+  const lockW = raceLockW, lockH = raceLockH;
+  const w = lockW ?? realW;
+  const h = lockH ?? realH;
   W = canvas.width  = w * dpr;
   H = canvas.height = h * dpr;
-  canvas.style.width  = w + 'px';
-  canvas.style.height = h + 'px';
+  if (lockW) {
+    const scale = Math.min(realW / lockW, realH / lockH);
+    canvas.style.width  = (lockW * scale) + 'px';
+    canvas.style.height = (lockH * scale) + 'px';
+    canvas.style.position = 'fixed';
+    canvas.style.left = '50%';
+    canvas.style.top = '50%';
+    canvas.style.transform = 'translate(-50%, -50%)';
+  } else {
+    canvas.style.width  = w + 'px';
+    canvas.style.height = h + 'px';
+    canvas.style.position = '';
+    canvas.style.left = '';
+    canvas.style.top = '';
+    canvas.style.transform = '';
+  }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 resize();
@@ -1227,8 +1250,8 @@ if (window.visualViewport) {
   window.visualViewport.addEventListener('resize', scheduleResize);
 }
 
-const VW = () => document.documentElement.clientWidth  || window.innerWidth;
-const VH = () => document.documentElement.clientHeight || window.innerHeight;
+const VW = () => raceLockW ?? (document.documentElement.clientWidth  || window.innerWidth);
+const VH = () => raceLockH ?? (document.documentElement.clientHeight || window.innerHeight);
 
 // ── seedable RNG ──────────────────────────────────────────
 // In solo play `rand` aliases Math.random. In a 1v1 race both players call
@@ -3616,6 +3639,10 @@ function runCountdown(startsAt) {
 function startRace() {
   raceMode = true;
   raceFinishedSent = false;
+  // lock the virtual world size so both players spawn identical platforms
+  raceLockW = RACE_W;
+  raceLockH = RACE_H;
+  resize();
   // opp ghost defaults
   raceOpponent.x = 0; raceOpponent.y = 0; raceOpponent.mcap = 0; raceOpponent.last = 0;
   // hop into the running game machinery — same as solo `start()` but skip
@@ -3638,7 +3665,7 @@ let lastRaceTickAt = 0;
 function maybeSendRaceTick() {
   if (!raceMode || !raceWS || raceWS.readyState !== 1 || !alive) return;
   const now = performance.now();
-  if (now - lastRaceTickAt < 33) return;   // ~30Hz
+  if (now - lastRaceTickAt < 20) return;   // ~50Hz
   lastRaceTickAt = now;
   const myMcap = (typeof currentMcap === 'function')
     ? Math.max(0, currentMcap() + (player.magaBonus | 0) + (player.casinoBonus | 0))
@@ -3661,30 +3688,43 @@ function maybeSendRaceTick() {
 
 function drawRaceOpponent() {
   if (!raceMode || !raceOpponent.last) return;
-  // Render opponent in OUR camera space — their world (x, y) is identical
-  // because both clients seeded from the same RNG stream.
-  const screenY = raceOpponent.y - camera;
+  // Linear-extrapolate ghost between ticks for smooth motion (otherwise
+  // 50Hz ticks look stuttery on a 60+Hz display). Cap the lookahead so a
+  // packet drop doesn't fling the ghost into the void.
+  const elapsedMs = Math.min(120, performance.now() - raceOpponent.last);
+  const dtFrames = elapsedMs / 16.67;
+  const px = raceOpponent.x + raceOpponent.vx * dtFrames;
+  const py = raceOpponent.y + raceOpponent.vy * dtFrames;
+  // Render in OUR camera space — their world (x, y) is identical because
+  // both clients seeded from the same RNG and the canvas is locked to
+  // RACE_W × RACE_H, so platforms sit at identical world coords.
+  const screenY = py - camera;
   if (screenY > VH() + 200 || screenY < -200) return; // off-screen
+  const W2 = player.w;        // ghost size matches our chungus exactly
+  const H2 = player.h;
   ctx.save();
   ctx.globalAlpha = 0.55;
   // shadow
   ctx.fillStyle = 'rgba(255,46,136,0.25)';
   ctx.beginPath();
-  ctx.ellipse(raceOpponent.x + 32, screenY + 64, 28, 6, 0, 0, Math.PI * 2);
+  ctx.ellipse(px + W2/2, screenY + H2, W2*0.45, 6, 0, 0, Math.PI * 2);
   ctx.fill();
+  // pink tint outline so ghost reads at a glance
+  ctx.shadowColor = 'rgba(255,46,136,0.85)';
+  ctx.shadowBlur = 14;
   // chungus body (use shared sprite if loaded)
   const sprite = (typeof chungusImg !== 'undefined' && chungusImg.complete) ? chungusImg : null;
   if (sprite) {
     if (raceOpponent.facing < 0) {
-      ctx.translate(raceOpponent.x + 64, screenY);
+      ctx.translate(px + W2, screenY);
       ctx.scale(-1, 1);
-      ctx.drawImage(sprite, 0, 0, 64, 64);
+      ctx.drawImage(sprite, 0, 0, W2, H2);
     } else {
-      ctx.drawImage(sprite, raceOpponent.x, screenY, 64, 64);
+      ctx.drawImage(sprite, px, screenY, W2, H2);
     }
   } else {
     ctx.fillStyle = '#ff2e88';
-    ctx.fillRect(raceOpponent.x, screenY, 64, 64);
+    ctx.fillRect(px, screenY, W2, H2);
   }
   ctx.restore();
   // name + mcap label above ghost
@@ -3696,10 +3736,10 @@ function drawRaceOpponent() {
   ctx.shadowBlur = 6;
   const lblY = screenY - 8;
   const name = (raceOpponent.name || document.getElementById('oh-opp-name')?.textContent || 'OPP').slice(0, 14);
-  ctx.fillText(name, raceOpponent.x + 32, lblY);
+  ctx.fillText(name, px + W2/2, lblY);
   ctx.fillStyle = '#fffb00';
   ctx.font = 'bold 12px ui-monospace, monospace';
-  ctx.fillText('$' + Math.floor(raceOpponent.mcap).toLocaleString(), raceOpponent.x + 32, lblY - 16);
+  ctx.fillText('$' + Math.floor(raceOpponent.mcap).toLocaleString(), px + W2/2, lblY - 16);
   ctx.restore();
 }
 
@@ -3732,6 +3772,10 @@ function onRaceLost(reason, msg) {
 function endRace(closeWs = true) {
   raceMode = false;
   setRng(null);
+  // restore full viewport for solo mode
+  raceLockW = null;
+  raceLockH = null;
+  resize();
   oppHudEl.classList.add('hidden');
   alive = false;
   started = false;
@@ -3759,18 +3803,34 @@ loop = function () {
   raf = requestAnimationFrame(loop);
 };
 
-// auto-enter lobby if URL carries ?room=
-(function autoEnterRoom() {
+// Auto-enter via the iframe's own URL (?room=…). When iframed at
+// chungus.site/game/?room=ABC the iframe URL doesn't see ?room unless the
+// parent rewrites the iframe src — so we ALSO listen for a postMessage
+// from the parent so embedders can wire it up however they like.
+function autoJoinByCode(code) {
+  if (!code) return;
+  setTimeout(() => {
+    if (!playerName) playerName = (document.getElementById('name-input').value || 'ANON').toUpperCase().slice(0, 14);
+    joinRoom(code.toUpperCase().replace(/[^A-Z0-9]/g, ''), 0, false);
+  }, 50);
+}
+(function autoEnterRoomFromUrl() {
   const u = new URLSearchParams(location.search);
   const r = u.get('room');
-  if (r) {
-    // wait a tick so DOM is ready, name is loaded, etc.
-    setTimeout(() => {
-      if (!playerName) playerName = (document.getElementById('name-input').value || 'ANON').toUpperCase().slice(0, 14);
-      joinRoom(r.toUpperCase().replace(/[^A-Z0-9]/g, ''), 0, false);
-    }, 50);
-  }
+  if (r) autoJoinByCode(r);
 })();
+window.addEventListener('message', (ev) => {
+  // accept {type:'chungus-room', code:'ABC'} from any origin (the embedding
+  // page) — only effect is auto-joining a public race room, no auth.
+  const m = ev.data;
+  if (!m || typeof m !== 'object') return;
+  if (m.type === 'chungus-room' && typeof m.code === 'string') {
+    autoJoinByCode(m.code);
+  }
+});
+// Tell the parent we're alive — useful for embedders that want to fire the
+// chungus-room postMessage as soon as the iframe is ready.
+try { window.parent && window.parent.postMessage({ type: 'chungus-ready' }, '*'); } catch {}
 
 document.getElementById('play-btn').addEventListener('click', start);
 document.getElementById('retry-btn').addEventListener('click', () => {
