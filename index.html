@@ -684,8 +684,14 @@
     text-align: left;
   }
   .share-warn code {
-    background: rgba(255,251,0,0.18); color: #fffb00; padding: 1px 6px;
+    background: rgba(255,251,0,0.18); color: #fffb00; padding: 2px 8px;
     border-radius: 4px; font-family: ui-monospace, monospace; letter-spacing: 1px;
+    cursor: pointer; user-select: all; transition: background 0.12s, color 0.12s;
+    border: 1px solid rgba(255,251,0,0.35);
+  }
+  .share-warn code:hover { background: rgba(255,251,0,0.32); }
+  .share-warn code.copied {
+    background: rgba(45,255,102,0.25); color: #2dff66; border-color: rgba(45,255,102,0.5);
   }
 </style>
 </head>
@@ -798,7 +804,7 @@
         <span id="rr-copy-status" style="font-size:11px;opacity:0.6;"></span>
       </div>
       <div class="share-warn">
-        ⚠ link auto-join is still under construction — if it doesn't drop them straight in, they can paste the room code <code id="rr-room-code">—</code> into <b>1V1 RACE → JOIN</b> manually.
+        ⚠ link auto-join is still under construction — if it doesn't drop them straight in, tap the room code to copy and have them paste it into <b>1V1 RACE → JOIN</b>: <code id="rr-room-code" title="click to copy">—</code>
       </div>
     </div>
     <div class="race-players" id="rr-players"></div>
@@ -3616,6 +3622,29 @@ document.getElementById('rr-copy-btn').addEventListener('click', () => {
     sel.addRange(range);
     status.textContent = 'press ⌘C / CTRL+C';
     setTimeout(() => { status.textContent = ''; }, 3000);
+  });
+});
+// Tap the room-code chip in the under-construction note to copy just the
+// code (handy when the share link gets eaten by some chat sanitizer).
+document.getElementById('rr-room-code').addEventListener('click', () => {
+  const el = document.getElementById('rr-room-code');
+  const code = (el.textContent || '').trim();
+  if (!code || code === '—') return;
+  copyToClipboard(code).then(() => {
+    const original = el.textContent;
+    el.classList.add('copied');
+    el.textContent = '✓ ' + original;
+    setTimeout(() => {
+      el.classList.remove('copied');
+      el.textContent = original;
+    }, 1400);
+  }).catch(() => {
+    // fallback: leave it selected so a manual ⌘C works
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
   });
 });
 document.getElementById('rr-ready-btn').addEventListener('click', () => {
