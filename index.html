@@ -646,6 +646,47 @@
   }
   .opp-hud .me-line { border-left: 3px solid #2dff66; }
   .opp-hud .opp-line { border-left: 3px solid #ff2e88; }
+
+  /* public lobby list */
+  .public-toggle {
+    display: flex; align-items: center; justify-content: center;
+    gap: 8px; margin: 4px 0 14px;
+    font-size: 12px; letter-spacing: 2px; opacity: 0.85;
+  }
+  .public-toggle input[type="checkbox"] {
+    accent-color: #ff66e8; width: 16px; height: 16px; cursor: pointer;
+  }
+  .public-toggle label { cursor: pointer; }
+  .lobby-list {
+    max-height: 180px; overflow-y: auto;
+    display: flex; flex-direction: column; gap: 6px;
+    margin-bottom: 12px;
+  }
+  .lobby-empty {
+    opacity: 0.45; font-size: 12px; padding: 18px 8px;
+    text-align: center; letter-spacing: 1px;
+  }
+  .lobby-row {
+    display: flex; justify-content: space-between; align-items: center;
+    background: rgba(255,255,255,0.04); padding: 9px 12px; border-radius: 8px;
+    cursor: pointer; transition: background 0.15s, transform 0.1s;
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+  .lobby-row:hover { background: rgba(255,102,232,0.18); border-color: rgba(255,102,232,0.4); transform: translateX(2px); }
+  .lobby-row .lh-left { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; }
+  .lobby-row .lh-host { font-size: 14px; letter-spacing: 1px; }
+  .lobby-row .lh-meta { font-size: 11px; opacity: 0.55; letter-spacing: 1px; }
+  .lobby-row .lh-target { font-size: 13px; color: #fffb00; letter-spacing: 1px; }
+  .race-section .race-sub.divider { margin: 8px 0 6px; opacity: 0.5; font-size: 11px; }
+
+  .share-warn {
+    opacity: 0.7; font-size: 11px; margin-top: 8px; line-height: 1.45;
+    text-align: left;
+  }
+  .share-warn code {
+    background: rgba(255,251,0,0.18); color: #fffb00; padding: 1px 6px;
+    border-radius: 4px; font-family: ui-monospace, monospace; letter-spacing: 1px;
+  }
 </style>
 </head>
 <body>
@@ -718,6 +759,10 @@
         <button class="mcap-chip" data-mcap="10000000">$10M</button>
       </div>
       <input id="custom-mcap" class="race-input" type="text" placeholder="OR CUSTOM (E.G. 750000)" autocomplete="off" inputmode="numeric">
+      <div class="public-toggle">
+        <input type="checkbox" id="public-cb" checked>
+        <label for="public-cb">PUBLIC LOBBY · anyone can join</label>
+      </div>
       <div class="race-actions">
         <button class="btn race" id="create-room-btn">CREATE RACE</button>
       </div>
@@ -725,7 +770,11 @@
 
     <!-- JOIN -->
     <div class="race-section" id="race-section-join">
-      <div class="race-sub" style="margin:0 0 8px;">paste room code or share link</div>
+      <div class="race-sub" style="margin:0 0 8px;">public lobbies</div>
+      <div class="lobby-list" id="lobby-list">
+        <div class="lobby-empty">— no public rooms — be the first!</div>
+      </div>
+      <div class="race-sub divider">— or enter a private code —</div>
       <input id="join-code" class="race-input" type="text" placeholder="ROOM CODE" autocomplete="off" spellcheck="false">
       <div class="race-actions">
         <button class="btn race" id="join-room-btn">JOIN</button>
@@ -747,6 +796,9 @@
       <div class="race-share-row">
         <button class="copy-btn" id="rr-copy-btn">COPY LINK</button>
         <span id="rr-copy-status" style="font-size:11px;opacity:0.6;"></span>
+      </div>
+      <div class="share-warn">
+        ⚠ link auto-join is still under construction — if it doesn't drop them straight in, they can paste the room code <code id="rr-room-code">—</code> into <b>1V1 RACE → JOIN</b> manually.
       </div>
     </div>
     <div class="race-players" id="rr-players"></div>
@@ -3316,7 +3368,64 @@ let raceServerStartsAt = 0;       // server-clock ms when race begins
 let raceServerOffsetMs = 0;       // (server - client) clock skew
 let raceFinishedSent = false;
 let raceWinnerId = null;
+let raceIsPublic = false;
 const raceOpponent = { id: null, name: '', x: 0, y: 0, mcap: 0, vx: 0, vy: 0, camera: 0, facing: 1, last: 0 };
+
+// ── public-lobby connection (separate from the race room WS) ──
+let lobbyWS = null;
+let lobbyMode = null;             // 'broadcaster' (creator advertising) | 'browser' (viewer)
+let lobbyHeartbeat = null;
+let cachedLobbyList = [];
+function isMobileViewport() {
+  return (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) ||
+         (window.innerWidth < 700);
+}
+function lobbyUrl() {
+  return `${PARTYKIT_PROTO}://${PARTYKIT_HOST}/parties/lobby/list`;
+}
+function openLobby(mode, onListMsg) {
+  closeLobby();
+  lobbyMode = mode;
+  lobbyWS = new WebSocket(lobbyUrl());
+  lobbyWS.addEventListener('message', ev => {
+    let m; try { m = JSON.parse(ev.data); } catch { return; }
+    if (m.type === 'list') {
+      cachedLobbyList = Array.isArray(m.entries) ? m.entries : [];
+      if (onListMsg) onListMsg(cachedLobbyList);
+    }
+  });
+  lobbyWS.addEventListener('close', () => {
+    if (lobbyHeartbeat) { clearInterval(lobbyHeartbeat); lobbyHeartbeat = null; }
+  });
+  return lobbyWS;
+}
+function closeLobby() {
+  if (lobbyHeartbeat) { clearInterval(lobbyHeartbeat); lobbyHeartbeat = null; }
+  if (lobbyWS) { try { lobbyWS.close(); } catch {} }
+  lobbyWS = null;
+  lobbyMode = null;
+}
+function broadcastPublicRoom(id, host, targetMcap) {
+  openLobby('broadcaster', null);
+  const payload = JSON.stringify({
+    type: 'register',
+    id, host, targetMcap,
+    mobile: isMobileViewport(),
+  });
+  const send = () => { if (lobbyWS.readyState === 1) lobbyWS.send(payload); };
+  if (lobbyWS.readyState === 1) send();
+  else lobbyWS.addEventListener('open', send, { once: true });
+  // heartbeat so the lobby keeps us alive past the 75s TTL
+  lobbyHeartbeat = setInterval(() => {
+    if (!lobbyWS || lobbyWS.readyState !== 1) return;
+    try { lobbyWS.send(JSON.stringify({ type: 'heartbeat', id })); } catch {}
+  }, 25_000);
+}
+function unregisterPublicRoom() {
+  if (!lobbyWS || lobbyMode !== 'broadcaster') return;
+  try { lobbyWS.send(JSON.stringify({ type: 'unregister' })); } catch {}
+  closeLobby();
+}
 
 function genRoomId() {
   const alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -3365,8 +3474,50 @@ document.querySelectorAll('.race-tab').forEach(tab => {
     tab.classList.add('active');
     document.querySelectorAll('.race-section').forEach(s => s.classList.remove('active'));
     document.getElementById('race-section-' + tab.dataset.tab).classList.add('active');
+    if (tab.dataset.tab === 'join') openLobbyBrowser();
+    else closeLobbyIfBrowsing();
   });
 });
+
+function fmtMcapLabel(n) {
+  return fmtMcapShort(n);
+}
+function renderLobbyList(entries) {
+  const wrap = document.getElementById('lobby-list');
+  if (!wrap) return;
+  if (!entries.length) {
+    wrap.innerHTML = '<div class="lobby-empty">— no public rooms — be the first!</div>';
+    return;
+  }
+  wrap.innerHTML = '';
+  for (const e of entries) {
+    const row = document.createElement('div');
+    row.className = 'lobby-row';
+    const platform = e.mobile ? '📱 mobile' : '🖥 desktop';
+    row.innerHTML = `
+      <div class="lh-left">
+        <div class="lh-host">${escapeHtml(e.host || 'ANON')}</div>
+        <div class="lh-meta">${escapeHtml(e.id)} · ${platform}</div>
+      </div>
+      <div class="lh-target">${fmtMcapLabel(e.targetMcap)}</div>
+    `;
+    row.addEventListener('click', () => {
+      // close lobby-browser before joining; race room will handle from here.
+      closeLobby();
+      joinRoom(e.id, 0, false);
+    });
+    wrap.appendChild(row);
+  }
+}
+function openLobbyBrowser() {
+  // already broadcasting? skip — can't be in two modes at once.
+  if (lobbyMode === 'broadcaster') return;
+  renderLobbyList(cachedLobbyList);
+  openLobby('browser', renderLobbyList);
+}
+function closeLobbyIfBrowsing() {
+  if (lobbyMode === 'browser') closeLobby();
+}
 
 // mcap chip selection
 let selectedMcap = 500000;
@@ -3401,6 +3552,7 @@ document.getElementById('create-room-btn').addEventListener('click', () => {
     return;
   }
   const id = genRoomId();
+  raceIsPublic = !!document.getElementById('public-cb').checked;
   joinRoom(id, selectedMcap, /*isCreator*/ true);
 });
 document.getElementById('join-room-btn').addEventListener('click', () => {
@@ -3411,9 +3563,12 @@ document.getElementById('join-room-btn').addEventListener('click', () => {
   if (m) code = m[1];
   code = code.toUpperCase().replace(/[^A-Z0-9]/g, '');
   if (!code) return;
+  raceIsPublic = false;
+  closeLobby();
   joinRoom(code, 0, /*isCreator*/ false);
 });
 document.getElementById('rr-leave-btn').addEventListener('click', () => {
+  unregisterPublicRoom();
   leaveRoom();
   hideAllRaceUi();
   titleEl.classList.remove('hidden');
@@ -3547,9 +3702,14 @@ function handleRaceMsg(msg) {
       const link = `${base}?room=${raceRoomId}`;
       document.getElementById('rr-target').textContent = fmtMcapShort(raceTargetMcap);
       document.getElementById('rr-share-link').textContent = link;
+      document.getElementById('rr-room-code').textContent = raceRoomId;
       document.getElementById('rr-share-wrap').style.display = 'block';
       // update browser URL so it's bookmarkable
       try { history.replaceState({}, '', `?room=${raceRoomId}`); } catch {}
+      // if we created this room as public, advertise it on the lobby party
+      if (raceIsPublic) {
+        broadcastPublicRoom(raceRoomId, raceMyName || 'ANON', raceTargetMcap);
+      }
       break;
     }
     case 'state': {
@@ -3601,6 +3761,9 @@ function handleRaceMsg(msg) {
       raceLockH = (typeof msg.worldH === 'number' && msg.worldH > 0) ? msg.worldH : RACE_H;
       // setRng → both players' platform/coin spawning is deterministic
       setRng(msg.seed);
+      // race is starting — drop our public listing so it doesn't sit there
+      // showing a room that's already in progress.
+      unregisterPublicRoom();
       runCountdown(msg.startsAt);
       break;
     }
@@ -3827,10 +3990,12 @@ function endRace(closeWs = true) {
   if (closeWs) leaveRoom();
 }
 function leaveRoom() {
+  unregisterPublicRoom();
   try { raceWS?.close(); } catch {}
   raceWS = null;
   raceMyId = null;
   raceRoomId = null;
+  raceIsPublic = false;
   try { history.replaceState({}, '', location.pathname); } catch {}
 }
 
