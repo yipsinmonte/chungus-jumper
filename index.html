@@ -3518,7 +3518,7 @@ function joinRoom(roomId, targetMcap, isCreator) {
   raceWS.addEventListener('close', () => {
     if (raceMode) {
       // mid-race disconnect → abandon to result screen
-      onRaceLost('connection lost');
+      onRaceLost({ reason: 'connection lost' });
     } else if (!roomEl.classList.contains('hidden')) {
       document.getElementById('rr-status').textContent = 'disconnected';
     }
@@ -3622,7 +3622,7 @@ function handleRaceMsg(msg) {
     case 'winner': {
       raceWinnerId = msg.id;
       if (msg.id === raceMyId) onRaceWon(msg);
-      else onRaceLost('opponent finished first', msg);
+      else onRaceLost(msg);
       break;
     }
     case 'full':
@@ -3774,24 +3774,44 @@ function onRaceWon(msg) {
   const txt = document.getElementById('race-result-text');
   txt.textContent = 'WIN';
   txt.className = 'race-result win';
-  document.getElementById('race-result-sub').textContent = 'first to ' + fmtMcapShort(raceTargetMcap);
-  const ms = msg && msg.finishMs ? msg.finishMs : 0;
-  document.getElementById('race-result-detail').textContent = ms > 0
-    ? `finished in ${(ms/1000).toFixed(1)}s`
-    : '';
+  const sub = document.getElementById('race-result-sub');
+  const detail = document.getElementById('race-result-detail');
+  const reason = msg && msg.reason;
+  if (reason === 'opponent died') {
+    sub.textContent = 'opponent died · you won';
+    detail.textContent = '';
+  } else if (reason === 'opponent left') {
+    sub.textContent = 'opponent left';
+    detail.textContent = '';
+  } else {
+    sub.textContent = 'first to ' + fmtMcapShort(raceTargetMcap);
+    const ms = msg && msg.finishMs ? msg.finishMs : 0;
+    detail.textContent = ms > 0 ? `finished in ${(ms/1000).toFixed(1)}s` : '';
+  }
 }
-function onRaceLost(reason, msg) {
+function onRaceLost(msg) {
   endRace(false);
   hideAllRaceUi();
   raceResultEl.classList.remove('hidden');
   const txt = document.getElementById('race-result-text');
   txt.textContent = 'L';
   txt.className = 'race-result lose';
-  document.getElementById('race-result-sub').textContent = reason || 'opponent finished first';
-  const ms = msg && msg.finishMs ? msg.finishMs : 0;
-  document.getElementById('race-result-detail').textContent = ms > 0
-    ? `they finished in ${(ms/1000).toFixed(1)}s`
-    : '';
+  const sub = document.getElementById('race-result-sub');
+  const detail = document.getElementById('race-result-detail');
+  const reason = msg && msg.reason;
+  if (reason === 'opponent died') {
+    // server's "opponent died" is from the winner's POV — from this client's
+    // POV (the loser), it was us who died.
+    sub.textContent = 'you died · opponent won';
+    detail.textContent = '';
+  } else if (reason === 'connection lost' || reason === 'opponent left') {
+    sub.textContent = 'connection lost';
+    detail.textContent = '';
+  } else {
+    sub.textContent = 'opponent finished first';
+    const ms = msg && msg.finishMs ? msg.finishMs : 0;
+    detail.textContent = ms > 0 ? `they finished in ${(ms/1000).toFixed(1)}s` : '';
+  }
 }
 function endRace(closeWs = true) {
   raceMode = false;
