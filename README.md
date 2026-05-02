@@ -24,6 +24,13 @@ Static site — works on Vercel, Netlify, GitHub Pages, anywhere. Vercel auto-de
 - `bg-zone-{1,2,3,4}.png` — themed zone backgrounds
 - `api/score.js` + `api/leaderboard.js` — global leaderboard endpoints
 - `package.json` — declares `@vercel/kv` for the API
+- `partykit/` — 1v1 race backend (PartyKit / Cloudflare Durable Objects)
+
+## 1v1 race
+
+Title screen → **1V1 RACE** → pick target mcap → share the room link. Both clients seed from the same RNG so platforms/coins are identical; first to reach the target mcap wins. Ghost of the opponent rendered translucent on your screen.
+
+To enable, deploy the `partykit/` backend (see `partykit/README.md`) and either edit `PARTYKIT_HOST` in `index.html` or drop a `<meta name="partykit-host" content="…">` in the `<head>`.
 
 ## Global leaderboard (Vercel KV setup)
 
