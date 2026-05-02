@@ -3383,12 +3383,50 @@ document.getElementById('rr-leave-btn').addEventListener('click', () => {
   hideAllRaceUi();
   titleEl.classList.remove('hidden');
 });
+function copyToClipboard(text) {
+  // navigator.clipboard requires clipboard-write permission, which iframes
+  // don't get unless the embedder sets allow="clipboard-write". Fall back to
+  // the legacy textarea-select-execCommand trick in that case.
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    return navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
+  }
+  return fallbackCopy(text);
+}
+function fallbackCopy(text) {
+  return new Promise((resolve, reject) => {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    ta.style.top = '0';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    ta.setSelectionRange(0, text.length);
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch {}
+    document.body.removeChild(ta);
+    ok ? resolve() : reject(new Error('copy failed'));
+  });
+}
 document.getElementById('rr-copy-btn').addEventListener('click', () => {
   const link = document.getElementById('rr-share-link').textContent;
-  navigator.clipboard.writeText(link).then(() => {
-    document.getElementById('rr-copy-status').textContent = '✓ COPIED';
-    setTimeout(() => { document.getElementById('rr-copy-status').textContent = ''; }, 1800);
-  }).catch(() => {});
+  const status = document.getElementById('rr-copy-status');
+  copyToClipboard(link).then(() => {
+    status.textContent = '✓ COPIED';
+    setTimeout(() => { status.textContent = ''; }, 1800);
+  }).catch(() => {
+    // last resort: select the text so user can manually copy
+    const el = document.getElementById('rr-share-link');
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    status.textContent = 'press ⌘C / CTRL+C';
+    setTimeout(() => { status.textContent = ''; }, 3000);
+  });
 });
 document.getElementById('rr-ready-btn').addEventListener('click', () => {
   if (raceWS && raceWS.readyState === 1) {
@@ -3456,7 +3494,15 @@ function handleRaceMsg(msg) {
     case 'hello': {
       raceMyId = msg.youId;
       raceTargetMcap = msg.targetMcap;
-      const link = `${location.origin}${location.pathname}?room=${raceRoomId}`;
+      // Build the share link from the canonical embedder URL — when the game
+      // is iframed at chungus.site/game/, location.* points at the Vercel
+      // origin which opponents can't easily get back to. Override via:
+      //   <meta name="share-base" content="https://chungus.site/game/">
+      const meta = document.querySelector('meta[name="share-base"]');
+      let base = (meta && meta.content) ? meta.content : 'https://chungus.site/game/';
+      base = base.split('?')[0];
+      if (!base.endsWith('/')) base += '/';
+      const link = `${base}?room=${raceRoomId}`;
       document.getElementById('rr-target').textContent = fmtMcapShort(raceTargetMcap);
       document.getElementById('rr-share-link').textContent = link;
       document.getElementById('rr-share-wrap').style.display = 'block';
