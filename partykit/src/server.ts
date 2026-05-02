@@ -8,7 +8,14 @@ type Player = {
   x: number;
   y: number;
   finished: boolean;
+  mobile: boolean;
+  vp: { w: number; h: number };
 };
+
+// World presets — both clients lock their canvas to one of these so
+// platform spawning produces byte-identical maps regardless of viewport.
+const WORLD_MOBILE = { w: 480, h: 800 };
+const WORLD_DESKTOP = { w: 720, h: 1080 };
 
 type RoomState = {
   seed: number;
@@ -89,11 +96,17 @@ export default class RaceRoom implements Party.Server {
     if (msg.type === "join") {
       if (this.state.players.size >= 2 && !p) return;
       const name = String(msg.name || "ANON").slice(0, 14).trim() || "ANON";
+      const mobile = !!msg.mobile;
+      const vpW = Number.isFinite(msg.vp?.w) ? +msg.vp.w : 0;
+      const vpH = Number.isFinite(msg.vp?.h) ? +msg.vp.h : 0;
       if (!p) {
-        p = { id: sender.id, name, ready: false, mcap: 0, x: 0, y: 0, finished: false };
+        p = { id: sender.id, name, ready: false, mcap: 0, x: 0, y: 0, finished: false,
+              mobile, vp: { w: vpW, h: vpH } };
         this.state.players.set(sender.id, p);
       } else {
         p.name = name;
+        p.mobile = mobile;
+        p.vp = { w: vpW, h: vpH };
       }
       this.broadcastState();
       return;
@@ -107,12 +120,22 @@ export default class RaceRoom implements Party.Server {
       if (this.state.players.size === 2 && all.every(x => x.ready) && !this.state.started) {
         this.state.started = true;
         this.state.startsAt = Date.now() + COUNTDOWN_MS;
+        // Pick the world preset: if either player is on mobile (or has a
+        // viewport too small to fit the desktop world), drop both to mobile.
+        const anyMobile = all.some(x =>
+          x.mobile ||
+          (x.vp.w > 0 && x.vp.w < WORLD_DESKTOP.w) ||
+          (x.vp.h > 0 && x.vp.h < WORLD_DESKTOP.h)
+        );
+        const world = anyMobile ? WORLD_MOBILE : WORLD_DESKTOP;
         this.broadcast({
           type: "start",
           seed: this.state.seed,
           targetMcap: this.state.targetMcap,
           startsAt: this.state.startsAt,
           serverNow: Date.now(),
+          worldW: world.w,
+          worldH: world.h,
         });
       }
       this.broadcastState();
@@ -135,6 +158,27 @@ export default class RaceRoom implements Party.Server {
       });
       for (const c of this.room.getConnections()) {
         if (c.id !== sender.id) c.send(payload);
+      }
+      return;
+    }
+
+    if (msg.type === "dead") {
+      if (this.state.winnerId || !this.state.started) return;
+      p.finished = true;
+      // declare the OTHER player winner (the survivor)
+      const others = [...this.state.players.values()].filter(o => o.id !== sender.id);
+      if (others.length === 1) {
+        const w = others[0];
+        this.state.winnerId = w.id;
+        w.finished = true;
+        this.broadcast({
+          type: "winner",
+          id: w.id,
+          name: w.name,
+          mcap: w.mcap,
+          reason: "opponent died",
+          finishMs: Date.now() - this.state.startsAt,
+        });
       }
       return;
     }

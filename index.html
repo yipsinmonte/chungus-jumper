@@ -3216,6 +3216,18 @@ function start() {
 
 let lastScoreTimestamp = null;
 async function gameOver() {
+  // race mode: tell server we died; it'll declare the opponent winner.
+  // Skip the rest of solo gameOver — race result UI takes over via
+  // onRaceLost when the winner broadcast comes back.
+  if (raceMode && !raceFinishedSent) {
+    raceFinishedSent = true;
+    if (raceWS && raceWS.readyState === 1) {
+      try { raceWS.send(JSON.stringify({ type: 'dead' })); } catch {}
+    }
+    stopMusic();
+    alive = false;
+    return;
+  }
   stopMusic();
   stopHeartbeat();
   currentMusicZone = -1;
@@ -3489,7 +3501,14 @@ function joinRoom(roomId, targetMcap, isCreator) {
   showRoom();
 
   raceWS.addEventListener('open', () => {
-    raceWS.send(JSON.stringify({ type: 'join', name: raceMyName }));
+    const isMobile = (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) ||
+                     (window.innerWidth < 700);
+    raceWS.send(JSON.stringify({
+      type: 'join',
+      name: raceMyName,
+      mobile: !!isMobile,
+      vp: { w: window.innerWidth, h: window.innerHeight },
+    }));
   });
 
   raceWS.addEventListener('error', () => {
@@ -3576,6 +3595,10 @@ function handleRaceMsg(msg) {
       raceServerStartsAt = msg.startsAt;
       raceServerOffsetMs = msg.serverNow - Date.now();
       raceTargetMcap = msg.targetMcap;
+      // server picks world dims based on both players' devices: mobile if
+      // either is on a touchscreen / small viewport, otherwise desktop.
+      raceLockW = (typeof msg.worldW === 'number' && msg.worldW > 0) ? msg.worldW : RACE_W;
+      raceLockH = (typeof msg.worldH === 'number' && msg.worldH > 0) ? msg.worldH : RACE_H;
       // setRng → both players' platform/coin spawning is deterministic
       setRng(msg.seed);
       runCountdown(msg.startsAt);
@@ -3639,9 +3662,10 @@ function runCountdown(startsAt) {
 function startRace() {
   raceMode = true;
   raceFinishedSent = false;
-  // lock the virtual world size so both players spawn identical platforms
-  raceLockW = RACE_W;
-  raceLockH = RACE_H;
+  // World dims should already be set by the 'start' message handler;
+  // fall back to mobile preset if a server omitted them.
+  if (!raceLockW) raceLockW = RACE_W;
+  if (!raceLockH) raceLockH = RACE_H;
   resize();
   // opp ghost defaults
   raceOpponent.x = 0; raceOpponent.y = 0; raceOpponent.mcap = 0; raceOpponent.last = 0;
